@@ -79,9 +79,10 @@ jobs:
           with open(path_in, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          # 匹配 "- **v1.16.0：..." 或 "- **v1.16.0:..." (中英文冒号都接受)
-          # 到下一个 "- **vX.Y.Z" (任意版本号, 倒序下一个) 或文件末尾为止
-          pattern = rf'^- \*\*{re.escape(anchor)}[：:].*?(?=^- \*\*v\d+\.\d+\.\d+|\Z)'
+          # 匹配 "## v1.16.0：..." 或 "## v1.16.0:..." (H2 标题, 中英文冒号都接受)
+          # 到下一个 "## vX.Y.Z" (任意版本号, 倒序下一个) 或文件末尾为止
+          # (CHANGELOG 倒序: v1.16.0 后面是 v1.15.16, 所以 lookahead 用任意 v\d+\.\d+\.\d+ 即可)
+          pattern = rf'^## {re.escape(anchor)}[：:].*?(?=^## v\d+\.\d+\.\d+|\Z)'
           m = re.search(pattern, content, re.MULTILINE | re.DOTALL)
           if not m:
               print(f"ERROR: no CHANGELOG section found for {anchor}", file=sys.stderr)

@@ -21,7 +21,52 @@ Last 3 个 Python 工具链版本：v1.2.8（2026-07-18, ~/ → %USERPROFILE% us
 
 ---
 
-- **v1.16.0：Kimi 站点首次真正支持 — `@match` 迁到 `*://www.kimi.com/*`,semver minor bump(2026-07-19)**:v1.15.16 之前 `ADAPTERS.kimi` 适配器代码虽然存在 (`assistantSel: '.kimi-message-content, [data-role="assistant"]'` 等 + host 探测分支 `if (host.includes('kimi') || host.includes('moonshot'))`),但 `@match` 头部写的是 `*://kimi.moonshot.cn/*` —— **该域名 Kimi 团队早已迁到 `www.kimi.com`**,`kimi.moonshot.cn` 现在空站 / 重定向,所以 v1.15.16 之前 **Kimi 站点上脚本根本跑不起来**(Tampermonkey 的 `@match` 不匹配就不注入脚本,`www.kimi.com` 上 `@match *://kimi.moonshot.cn/*` 完全没命中,适配器再全也白搭)。README 表格里 Kimi "✅ Supported" 标了 N 个版本都是纸上谈兵,**只有 DeepSeek 是真正在生产环境跑过验证**。**修法**:`@match` 改成 `*://www.kimi.com/*` + host 探测从 `host.includes('kimi') || host.includes('moonshot')` 简化成 `host.includes('kimi.com')`(`www.kimi.com` 含 `kimi.com` 关键词,`|| 'moonshot'` 已是死代码——@match 都不走 `moonshot` 域了)+ 中英 README 表格 Kimi URL 同步。**semver 选择**:`1.15.16 → 1.16.0`(minor bump,不是 patch)。原因:**首次真正支持一个新站点** = minor 级 feature(对终端用户可见的能力扩展),不是 patch 级别(不是"修了已有的 broken 行为"——而是"从未 work 过的 stub 变成 work"),也不是 major(无破坏性,旧用户升级无 breaking)。**5 处改动的 cascade 同步**:① `chatdigest.user.js:4` `@version` 1.15.16 → 1.16.0;② `chatdigest.user.js:9` `@match` `*://kimi.moonshot.cn/*` → `*://www.kimi.com/*`;③ `chatdigest.user.js:122` host 探测简化;④ `README.md:42` Kimi URL `kimi.moonshot.cn` → `www.kimi.com`;⑤ `README.zh.md:42` Kimi URL 同步;⑥ `CHANGELOG.md` 顶部 summary + Last 3 同步 + 加本 entry。**0 测试覆盖**:JS 端 0 单测,host 探测 + match 模式都是 runtime;**手动验证清单**:① Tampermonkey 仪表盘 → 找 "ChatDigest / 聊摘" → version 是不是 1.16.0;② 打开 `https://www.kimi.com` → 控制台 F12 切到 ChatDigest 那行 → 看到 `✅ ChatDigest started · Kimi` 字样(不是红色 ReferenceError);③ 在 `www.kimi.com` 上点 FAB(📑)→ 触发总结咒语注入 + 发送 + 等待 + 自动保存;④ F12 Console 看到 `[ChatDigest] ...` 相关 log,无 `404 adapter not found` 之类的 fallthrough;⑤ `kimi.moonshot.cn` 上脚本**不再注入**(预期行为,@match 改了),如还想要兼容该旧域名可显式加 `*://kimi.moonshot.cn/*` 行(但跟 "Kimi 团队已迁走" 事实相悖,不建议)。**诚实优先教训**(label honesty):README "✅ Supported" 标签必须代表"真正在生产环境验证过"——之前标 Kimi 是"有 stub 代码就标 yes",违反"标签要跟实际行为一致"原则。v1.16.0 起 Kimi 才真正支持,后续若新增站点,**必须先有真用户实测**才能在 README 表格标 ✅,否则用 🟡(stub)/ ❌(未支持)。**cascade bump 必要性**:`@match` 跨站点 URL 变化是 fix + 首次真支持,按"cascade fix 必须 cascade bump"规则不假装旧版稳态——v1.15.16 summary 顶部写"0 行为变化,纯 metadata 清理",在 1.15.16 内偷偷加 Kimi URL 迁移会让 summary 撒谎,所以**必须 minor bump 到 1.16.0**。`@version` 1.15.16 → 1.16.0。`IMATOOLS_VERSION` 不动(1.2.8 仍最新,Kimi URL 迁移是 userscript 端 UX 改动不是工具链改动)。pytest 仍 139 PASS(无 Python 改动)。**v1.15.11 ~ 1.15.16 的 fix / 清理全部保留** —— v1.16.0 是 Kimi 真正支持,不重做 v1.15.16 任何东西。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,version 改成 1.16.0 即可)。
+## v1.16.0：Kimi 站点首次真正支持 (2026-07-19)
+
+> **TL;DR**: `` `@match` `` 从 `*://kimi.moonshot.cn/*` 迁到 `*://www.kimi.com/*`，Kimi 站点用户从 v1.16.0 起能正常使用。之前 Kimi "✅ Supported" 标了 N 个版本都是 stub，只有 DeepSeek 是真正在生产环境跑过验证。
+
+### 🚀 根因
+
+v1.15.16 之前 `ADAPTERS.kimi` 适配器代码虽然存在 (`assistantSel: '.kimi-message-content, [data-role="assistant"]'` + host 探测分支 `if (host.includes('kimi') || host.includes('moonshot'))`)，但 `` `@match` `` 头部写的是 `*://kimi.moonshot.cn/*` —— **该域名 Kimi 团队早已迁到 `www.kimi.com`**。`kimi.moonshot.cn` 现在空站 / 重定向，所以 v1.15.16 之前 **Kimi 站点上脚本根本跑不起来** (Tampermonkey `` `@match` `` 不匹配就不注入脚本，`www.kimi.com` 上 `` `@match` `` `*://kimi.moonshot.cn/*` 完全没命中，适配器再全也白搭)。
+
+### 🔧 修法（6 处改动 cascade 同步）
+
+| # | 文件 | 改动 |
+|---|------|------|
+| ① | `chatdigest.user.js:4` | `` `@version` `` 1.15.16 → **1.16.0** |
+| ② | `chatdigest.user.js:9` | `` `@match` `` `*://kimi.moonshot.cn/*` → `*://www.kimi.com/*` |
+| ③ | `chatdigest.user.js:122` | host 探测从 `kimi \|\| moonshot` 简化成 `kimi.com`（顺手清掉 dead code） |
+| ④ | `README.md:42` | Kimi URL `kimi.moonshot.cn` → `www.kimi.com` |
+| ⑤ | `README.zh.md:42` | Kimi URL 同步 |
+| ⑥ | `CHANGELOG.md` | 顶部 summary + Last 3 + 本 entry |
+
+### 📊 semver 选择
+
+**`1.15.16 → 1.16.0`（minor bump，不是 patch）**
+
+- **patch** = 修已有 broken 行为（用户已能用，但有 bug / 部分功能坏掉）
+- **minor** = 新增可见能力（用户没用过的 stub → 能用）← **本版本属于这个**
+- **major** = 破坏性变更
+
+**关键判断**：旧版本里 Kimi 用户实际用过吗？没用过（只是 stub）= minor；用过但坏了 = patch。
+
+### 📝 验证清单
+
+1. Tampermonkey 仪表盘 → "ChatDigest / 聊摘" → version 是不是 **1.16.0**
+2. 打开 `https://www.kimi.com` → F12 Console 看到 `✅ ChatDigest started · Kimi` 字样
+3. 在 `www.kimi.com` 上点 FAB（📑）→ 触发总结咒语注入 + 发送 + 等待 + 自动保存
+4. F12 Console 看到 `[ChatDigest] ...` log，无 `404 adapter not found` 之类 fallthrough
+5. `kimi.moonshot.cn` 上脚本**不再注入**（预期行为，`` `@match` `` 改了）
+
+### ⚠️ 教训 (label honesty)
+
+README "✅ Supported" 标签必须代表"真正在生产环境验证过"——之前标 Kimi 是"有 stub 代码就标 yes"，违反"标签要跟实际行为一致"原则。v1.16.0 起 Kimi 才真正支持，后续若新增站点，**必须先有真用户实测**才能在 README 表格标 ✅，否则用 🟡(stub) / ❌(未支持)。
+
+### 🔗 cascade bump 必要性
+
+`` `@match` `` 跨站点 URL 变化是 fix + 首次真支持，按 "cascade fix 必须 cascade bump" 规则不假装旧版稳态 —— v1.15.16 summary 顶部写"0 行为变化，纯 metadata 清理"，在 1.15.16 内偷偷加 Kimi URL 迁移会让 summary 撒谎，所以**必须 minor bump 到 1.16.0**。
+
+`@version` 1.15.16 → 1.16.0。`IMATOOLS_VERSION` 不动（1.2.8 仍最新）。pytest 仍 139 PASS（无 Python 改动）。
 
 - **v1.15.16：清理 @description 臃肿 — 1833 → 240 字符(-87%),最佳实践对齐(2026-07-19)**:用户 review 时指出"`@description` 里塞版本更新记录太臃肿,这是最佳实践规范吗?"——是 anti-pattern。v1.15.15 的 @description 已经膨胀到 **1833 字符 / ~1222 字**(把 v1.14.9 ~ v1.15.15 共 14 个版本 changelog 全塞进单行 description,平均每版加 ~130 chars),而且每加一个版本都往上堆,典型的"渐进式膨胀失控"。**最佳实践**(参考 npm / browser extension / VS Code extension / userscripts 主流项目):`@description` 只写 **1-3 句功能描述**,变更历史归 `CHANGELOG.md` / GitHub Releases / 项目根目录 markdown。**@description 应当跟 GitHub README 顶部对齐**——简洁、卖点、不被 changelog 噪音污染。**修法**:v1.15.16 的 @description 改成 **240 字符**,只保留 6 项核心信息:① 1 句功能描述("一键把 AI 对话整理成 Markdown 知识库文章");② 4 大差异化卖点(完全本地 / 无订阅 / 无需 API key / 隐私优先);③ 多站点支持(DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝);④ 玻璃拟态 UI;⑤ IMA / Obsidian 等任意 Markdown 友好工具推送;⑥ locale-aware 文件名(zh = 聊摘, 其他 = ChatDigest);⑦ "变更历史见 CHANGELOG.md" 引导。**0 行为变化**,纯 metadata 清理,代码本身 0 改动。**V8 仿真整段 IIFE 跑通**(zh-CN + en-US),菜单注册、IIFE 顶部"report bug"兜底、SUMMARY_PROMPT try/catch fallback、waitBody 全部正常。pytest 仍 139 PASS(无 Python 改动)。`@version` 1.15.15 → 1.15.16。`IMATOOLS_VERSION` 不动(1.2.8 仍最新)。**v1.15.11 ~ 1.15.15 的 fix 全部保留** — v1.15.16 是 metadata 清理不是 fix。**最佳实践笔记**: userscript / npm package / browser extension / IDE plugin 任何 metadata 字段(`@description` / `package.json description` / `extension marketplace description`)在每次发版前 grep 长度,> 500 chars 立即 trim;变更历史永远归 CHANGELOG.md (单独文件 / GitHub Releases),**不**塞进 metadata 字段。
 

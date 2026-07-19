@@ -1172,7 +1172,7 @@
             'toast.autoSent':           '🚀 已自动发送',
             'toast.autoSentEnter':      '🚀 已自动发送（Enter）',
             'toast.autoTried':          '🚀 已尝试发送',
-            'toast.waitingGen':         '⏳ 正在等待 DeepSeek 生成完成…',
+            'toast.waitingGen':         '⏳ 正在等待 {name} 生成完成…',
             'toast.waitingElapsed':     '⏳ 等待生成中…(已等 {s}s)',
             'toast.waitTimeout1':       '⏱️ 未检测到回复（2 分钟超时），请手动抓取',
             'toast.waitTimeout2':       '⏱️ 等待超时（2 分钟），请手动抓取',
@@ -1212,7 +1212,7 @@
             'toast.autoSent':           '🚀 Auto-sent',
             'toast.autoSentEnter':      '🚀 Auto-sent (Enter)',
             'toast.autoTried':          '🚀 Tried to send',
-            'toast.waitingGen':         '⏳ Waiting for DeepSeek to finish...',
+            'toast.waitingGen':         '⏳ Waiting for {name} to finish...',
             'toast.waitingElapsed':     '⏳ Waiting... ({s}s elapsed)',
             'toast.waitTimeout1':       '⏱️ No reply detected (2 min timeout), please capture manually',
             'toast.waitTimeout2':       '⏱️ Timeout (2 min), please capture manually',
@@ -1242,8 +1242,15 @@
         const dict = MSGS[lang];
         let s = dict && dict[key];
         if (s === undefined) return key;  // 当前 locale 缺 key → 直接返回 key，不跨语言回退
-        if (params) {
-            s = s.replace(/\{(\w+)\}/g, (m, name) => params[name] !== undefined ? String(params[name]) : m);
+        // v1.17.0+: SITE.name 自动 fallback 到 {name} placeholder (修复 i18n hardcode "DeepSeek" 等)
+        // 隐式调用 t('toast.waitingGen') 也能拿到当前站品牌名 —— 不需每个 toast 调用显式传 SITE.name
+        // 显式传 { name: 'XXX' } 优先级更高 (Object.assign 后写覆盖)
+        const merged = params ? Object.assign({}, params) : {};
+        if (typeof SITE !== 'undefined' && SITE && merged.name === undefined) {
+            merged.name = SITE.name;
+        }
+        if (Object.keys(merged).length > 0) {
+            s = s.replace(/\{(\w+)\}/g, (m, name) => merged[name] !== undefined ? String(merged[name]) : m);
         }
         return s;
     }
@@ -1358,9 +1365,17 @@
 
     /* 自动发送：优先点击「发送」按钮；
        找不到按钮时，在 textarea 上派发 Enter 键（DeepSeek/多数站点是回车即发送，
-       Shift+Enter 才是换行，故这里只发纯 Enter）。 */
+       Shift+Enter 才是换行，故这里只发纯 Enter）。
+       v1.17.0+: 加 Kimi / 类 Lexical 站适配 —— Kimi send button 不是 <button>，
+       是 <div class="send-button-container"> 含 <svg class="iconify send-icon" name="Send">。
+       实际 HTML (用户实测 2026-07-19):
+         <div class="send-button-container">
+           <svg class="iconify send-icon" name="Send">...</svg>
+         </div>
+       现有 selector 全部 0 命中, 走 fallback `execCommand('insertParagraph')` —— 不发送,
+       waitAndAutoSave 等 2s 稳定后直接抓最近已有 AI reply 导出. 修法: 加 Kimi 适配. */
     function autoSend(input) {
-        const sendSel = 'button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button';
+        const sendSel = 'button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button, .send-button-container, [name="Send"]';
         let btn = null;
         try {
             btn = Array.from(document.querySelectorAll(sendSel))

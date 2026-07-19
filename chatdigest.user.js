@@ -508,16 +508,6 @@
         return md;
     }
 
-    /* 删除「紧贴 heading 前的 ---」：AI 经常写「开场段 + --- + ## 章节」
-       的结构，--- 紧跟 heading 属于冗余分隔（## 本身就是 section break），
-       留着 --- 反而让开场段视觉上被「挤」成 h2 似的"标题"。strip 掉
-       --- 那一行即可，heading 保留。YAML frontmatter 的 `---` 在
-       buildYamlFrontmatter 里单独拼，不走这条路径，不受影响。 */
-    function stripRedundantHr(md) {
-        // 匹配一行（只有 --- + 可选空白）+ 一个或多个换行（中间可能有空行）+ 紧跟 heading
-        return md.replace(/^---[ \t]*\n+(?=#+\s)/gm, '');
-    }
-
     /* 判断一个消息节点是否为「AI 回复」。DeepSeek 等带 .ds-markdown 标记；
        其余站点回退到站点专属 assistantSel 选择器匹配（容器自身或其内部含 AI 标记）。 */
     function isAssistantNode(node) {
@@ -587,7 +577,6 @@
         let md = (thinking ? thinking + '\n\n' : '') + answer;
         md = balanceFences(normalizeMd(md));   // 先补全可能缺失的闭合围栏（DOM 提取时结尾 ``` 偶会丢失）
         md = unwrapSourceFences(md);            // 再解包「整篇 Markdown/纯文本源码」围栏（plaintext/text/markdown/md/txt），顺序必须在 balanceFences 之后
-        md = stripRedundantHr(md);              // 删除「紧贴 heading 前的 ---」（冗余分隔，删掉不丢信息；`##` 自己就是 section break）
         return cleanCitations(md);              // 最后清洗引用角标残迹（DeepSeek 编号引用 [-3](url) / 短横残留）
     }
 

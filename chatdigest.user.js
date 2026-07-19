@@ -913,34 +913,50 @@
         return s;
     }
 
-    /* 从抓取内容提取一段纯文本摘要，用于 description（首个非标题/列表/引用/代码段落，截断）
-       v1.14.9 修复：
-       ① 标题行：链首加 .filter(!/^#{1,6}\s/.test(l)) 用原始行跳过标题行
-          （必须在 strip map 之前），解决 v1.8.0 注释「首个非标题段落」与
-          实现（strip 后保留为摘要）不一致。
-       ② 代码围栏内部：原逻辑只跳过以 ``` 开头的行，但 ``` 围栏内部的
-          代码行（print(1) 之类）会被当摘要。用状态机跟踪是否在围栏内，
-          围栏内部的所有行都跳过。 */
+    /* 从抓取内容提取一段纯文本摘要，用于 YAML frontmatter 的 description。
+       策略：跳过 H1 行（标题已由 frontmatter title 承载，不重复），取之后
+       的前 N 字符（默认 100），途中 strip 掉所有 markdown 行内/行首装饰
+       （标题标记 / 列表 / 引用 / 表格行 / 围栏内代码 / bold / italic /
+       inline code / link / image），只留纯文本。
+       不特意区分 H2/H3——用户视角下"开头那段"就是描述，不需要先找 H2
+       当 prefix；万一没 H2 也不影响。 */
     function extractDescription(md, maxLen) {
-        maxLen = maxLen || 200;
+        maxLen = maxLen || 100;
         const lines = (md || '').split('\n');
-        const paras = [];
-        let inFence = false;   // v1.14.9 新增：跟踪是否在 ``` 围栏内
+        let started = false;   // 跳到 H1 之后才收集
+        let inFence = false;   // 围栏内代码跳过
+        const buf = [];
         for (const raw of lines) {
+            if (!started) {
+                if (/^#\s/.test(raw)) started = true;
+                continue;
+            }
             if (inFence) {
-                // 围栏内任何行都跳；遇 ``` 闭合
                 if (/^```/.test(raw)) inFence = false;
                 continue;
             }
             if (/^```/.test(raw)) { inFence = true; continue; }
-            if (/^#{1,6}\s/.test(raw)) continue;        // ① 跳标题行（原始行）
-            const stripped = raw.replace(/^#{1,6}\s+/, '').trim();
-            if (!stripped) continue;                    // 空行
-            if (/^[-*+]\s/.test(stripped)) continue;    // 列表
-            if (/^>\s/.test(stripped)) continue;        // 引用
-            paras.push(stripped);
+            if (!raw.trim()) {
+                if (buf.length) buf.push(' ');  // 空行 → 段落分隔
+                continue;
+            }
+            const cleaned = raw
+                .replace(/^#{1,6}\s+/, '')     // 标题标记
+                .replace(/^[-*+]\s+/, '')      // 无序列表
+                .replace(/^\d+[.)]\s+/, '')    // 有序列表
+                .replace(/^>\s?/, '')          // 引用
+                .replace(/^\|.*\|$/, '')       // 表格行
+                .trim();
+            if (!cleaned) continue;
+            buf.push(cleaned);
         }
-        const text = paras.join(' ').replace(/\s+/g, ' ').trim();
+        const text = buf.join(' ')
+            .replace(/\*+/g, '')                                    // bold / italic
+            .replace(/`([^`]+)`/g, '$1')                            // inline code
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')                // link
+            .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')               // image
+            .replace(/\s+/g, ' ')
+            .trim();
         if (!text) return '';
         return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
     }

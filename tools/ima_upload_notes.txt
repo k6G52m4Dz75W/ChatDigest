@@ -1,0 +1,819 @@
+================================================================
+ima_upload.bat  使用说明 / 版本记录
+（本说明独立存放：.bat 文件内禁止出现任何中文字符——
+ 既不能是 REM/:: 注释，也不能是 echo 输出。原因与排错见下方
+ 【常见故障：拖放 bat 闪退】一节）
+================================================================
+
+【用途】
+一键把 Markdown 文件导入 IMA 知识库（走 ima_upload.py 官方 OpenAPI）。
+支持两种触发方式：
+  1) 双击（不拖放任何东西）：导入 ima_config.ini 的 SRC 来源文件夹里的全部 .md
+  2) 拖放文件 / 文件夹到 bat 上：导入被拖放项里的 .md
+     - 拖放的是文件：是 .md 就导入，非 .md 自动跳过
+     - 拖放的是文件夹：导入该文件夹内的全部 .md（仅一层，不递归子目录）
+
+【使用前的一次性配置】
+配置已外置到独立 ini，bat 本身不再写任何配置：
+  1) 把同目录的 ima_config_sample.ini 复制为 ima_config.ini
+  2) 用记事本打开 ima_config.ini，填写下面三项（以 ; 开头的行是注释，可忽略；
+     等号前后可加空格、值里不要加引号）：
+
+       KB_ID = 你的知识库ID          ; 必填。ima.qq.com 知识库设置里查看
+       SRC   = C:\你的\导出目录      ; 双击模式用。留空则双击时必须拖放
+       PY    = C:\路径\python.exe    ; 可选；python 不在 PATH 时才需要
+
+说明：
+  - ima_config.ini 已加入仓库 .gitignore，不会随提交泄露你的知识库 ID / 本地路径；
+    仓库只保留 ima_config_sample.ini 模板。
+  - KB_ID 为空时双击/拖放都会先报错提示，不会误传。
+  - SRC 只取一层目录里的 .md；如需递归或别的规则，改 bat 或自行调用 ima_upload.py。
+
+【凭证（IMA 账号）】
+bat 只是调用 ima_upload.py，凭证由它读取，提前准备好其一即可（配置里不存凭证）：
+  A) 环境变量 IMA_CLIENT_ID / IMA_API_KEY
+     （临时：set IMA_CLIENT_ID=... ；永久：setx IMA_CLIENT_ID ... 后重开窗口）
+  B) 文件 %USERPROFILE%\.config\ima\IMA_CLIENT_ID 与 IMA_API_KEY
+导入前脚本会自动校验该 KB_ID 是否当前账号可写，无权限会立即报错并列出可写库。
+
+【Python（PY 即 Python 可执行文件）】
+PY 就是用来跑 ima_upload.py 的那个 Python（命令名或完整路径）。
+  - 默认自动探测：先试 python，找不到再试 py 启动器。
+  - 若你的 Python 是 Miniconda 且未注册为默认 python（PATH 里没有 python），
+    在 ima_config.ini 直接填 PY 的完整路径即可，例如：
+        PY = C:\Users\你的用户名\miniconda3\python.exe
+    或某个虚拟环境：
+        PY = C:\Users\你的用户名\miniconda3\envs\myenv\python.exe
+  - 填好后会做一次可用性校验（python --help 能跑通才算数）；跑不通会明确提示
+    检查该 python 是否可用、依赖是否安装（pip install -r tools/requirements.txt）、
+    或把 PY 改成正确的 python.exe 路径。
+依赖（与 ima_upload.py 相同）：见同目录 requirements.txt
+（一次性安装：pip install -r tools/requirements.txt；
+ HTTP 桥模式 --serve 不需要 watchdog，仅目录监视模式必需）
+
+【入库标题规则（简版，详见 README）】
+不显式指定标题时，脚本从文件名自动提取真实标题并去掉 Chat2Knowledge 前缀；
+IMA 要求 title 与 file_name 完全一致（含 .md），最终统一写成「标题.md」。
+
+【常见故障：拖放 bat 闪退（窗口一闪就关）】
+现象：把 .md 文件拖到 ima_upload.bat 上，黑窗口一闪即关、什么都没发生。
+bat 闪退通常是「语法错误」导致 cmd 立即中止。按致命程度排列，根因基本都在这几类：
+  (1)【最致命，本次真正根因】echo 文本里出现未转义的括号 ( )，而且该行又处在
+      if (...) ( ... ) / for (...) ( ... ) 这类带括号的代码块内。cmd 会把 echo
+      里的 ( 当成「新代码块开始」、) 当成「块结束」，导致括号不匹配 → 语法错误
+      → 整段脚本中止 → 闪退。（本次出问题的正是 echo 行里写了 "(e.g. ...)" 与
+      "(s)"。）修复：echo 文本里不要出现裸括号，或改用 ^( ^) 转义。
+  (2) bat 文件是 LF（Unix 换行）而非 CRLF（Windows 换行）。cmd.exe 要求 CRLF，
+      LF 会让多行块 / 标签解析失败 → 语法错误 → 闪退。本项目 bat 由脚本生成时
+      须写出 CRLF；若你用编辑器另存 / 改过，务必选 CRLF（VS Code 右下角切换；
+      记事本默认就是 CRLF，一般无此问题）。
+  (3) bat 里残留了中文字符（echo 或注释）。中文 Windows 用 GBK 解析 .bat 的
+      UTF-8 字节，某些中文字节会被误读成 ) & > 等命令元字符 → 语法错误 → 闪退。
+      所以本 bat 保持纯英文 ASCII，中文说明集中放在本 notes.txt。
+  (4)【最隐蔽】子程序里出现裸命令连接符 &（如 `if ... set ... & goto label`），
+      且这个子程序是从某个 (...) 括号内代码块里 call 出来的。cmd 在「块内 call
+      子程序、子程序里又有 & 复合命令」这种嵌套下会解析错乱，报
+      "& was unexpected at this time." 而立刻中止。本次真正的致命点正是
+      :trim 子程序（在 for /f (...) do (... 配置解析块内被 call :trim 调用）
+      里的两行 `set ... & goto trim_loop`。修复：彻底删除该子程序，改用一个
+      嵌套 for /f "eol= tokens=*" 直接给配置值去首尾空格（for /f 自带去空白），
+      不再需要子程序，也就没有 & 与 EnableDelayedExpansion。
+自检：用记事本打开 ima_upload.bat，（a）搜不到任何中文；（b）VS Code 看右下角
+  为 CRLF。bat 现已不在磁盘写任何日志文件，所有信息都直接显示在窗口里；若仍
+  闪退，请从 cmd 进入 tools 目录后手动运行 `ima_upload.bat "某个.md"`，窗口不
+  会一闪即关，能直接看到 cmd 报的具体错误（如语法错误），把该报错发我即可定位。
+
+【常见故障：KB_ID not set（明明配了 ima_config.ini 却报没设）】
+现象：已复制 ima_config_sample.ini 为 ima_config.ini 并填好 KB_ID，bat 仍报
+  [error] KB_ID not set. Copy ima_config_sample.ini to ima_config.ini and set KB_ID=...
+根因：ima_config.ini 里写成 `KB_ID = xxx`（等号前面多了个空格）。bat 用 for /f 按
+  `=` 切分，切出的 key 是 "KB_ID "（带尾随空格），和代码里比对的 "KB_ID" 不相等
+  → 永远设不上。value 前面的空格会被内层 for /f 去掉，但 key 名后面的空格没处理。
+  （v1.1.5 已修复：给 key 也加一层去空格的 for /f，等号前后有 / 无空格现在都能读。）
+自查 / 临时绕过：
+  - 直接把 ima_config.ini 改成 `KB_ID=xxx`（等号前后都不留空格）即可立刻生效；
+  - 或升级到 v1.1.5 的 ima_upload.bat，两种写法都支持。
+  - 若仍报 not set：确认 ima_config.ini 与 bat 在同一文件夹（bat 会提示
+    "ima_config.ini not found" 而非 "KB_ID not set"）；有 found 提示但 KB_ID 仍空，
+    说明那一行的 key 没匹配上（检查是否写成了注释、是否等号两边有奇怪字符、
+    文件是否被存成了带 BOM 的 UTF-8 导致首行被加料）。
+  注：KB_ID 形如 base64 长串、结尾常带 =，这是正常的，bat 会原样读取并传给脚本。
+
+【成功 / 失败提示（用户最关心）】
+bat 直接把 Python 的真实输出显示在屏幕上（不再写任何磁盘日志文件），成功失败都看得见。
+显示内容：
+  - 每个 .md 上传时，Python 的真实输出（成功打 [OK] 已导入知识库 / 失败打 [ERR] ...）
+    直接显示在窗口。
+  - 紧接着打明确的横幅：`[OK] uploaded: <路径>` 或 `[FAIL] upload failed, exit code N: <路径>`。
+  - 所有文件处理完后打汇总：`[summary] uploaded OK : N` / `[summary] failed : M`
+    （都没上传则提示 no files were uploaded）。
+  - 设 `PYTHONIOENCODING=utf-8` + 顶部 `chcp 65001`，保证 Python 输出与屏幕的中文不乱码。
+实现细节：python 直接输出到屏幕，紧接 `set "RC=%errorlevel%"` 捕获退出码，按 RC 打
+  OK/FAIL 横幅并 `set /a OK_CNT/FAIL_CNT+=1`（v1.1.8 起不再使用临时文件 _upload_out.tmp
+  与 ima_upload.log，信息全部实时上屏）。
+
+【常见故障：上传成功却在收尾时报 `: was unexpected at this time.` 并闪退】
+现象：Python 输出 `[OK] 已导入知识库: ...` 正常打完，紧接着一行
+  `: was unexpected at this time.` 然后窗口一闪即关。
+根因：bat 的 `:upload` 子程序里那段「if %RC%==0 ( ... ) else ( ... )」收尾块，在
+  **执行前**就会被 cmd 一次性解析。即便本次上传成功、根本没走 else 分支，else 块里
+  那行 echo 文本 `… (exit=%RC%): …` 中的字面圆括号，会被 cmd 当成「新代码块开始/结束」，
+  其后的 `: %ARG%` 就成了非预期的 `:` → 报 `: was unexpected at this time.`。
+  也就是说：**只要 (...) 块内的 echo 文本里出现字面圆括号，整个块在解析阶段就崩，
+  与成败、是否真执行到那一行无关**。
+修复（v1.1.7）：把那行 echo 的圆括号去掉，改为 `echo [FAIL] upload failed, exit code %RC%: %ARG%`
+  （冒号 mid-text 是安全的，问题只出在 `(`）。并全文扫描确认：再无任何 echo 行文本
+  内含字面圆括号。
+自查同类隐患：凡是 `if (...) ( echo ... )` / `for (...) do ( echo ... )` 这类块内的
+  echo，文本里一律不要出现字面 `(` `)`；要表达「（…）」请用中文全角括号 「（）」，
+  或直接写成 `exit code xxx` 这种不含半角括号的写法。
+
+【版本记录】  （Python 工具当前版本：ima_upload.py / ima_watcher.py = v1.2.8；JS 脚本 v1.15.16（清理 @description 臃肿：1833 → 240 字符）；两脚本均支持 --version 查看）
+
+【脚本 v1.15.16】清理 @description 臃肿 — 1833 → 240 字符（2026-07-19）
+  - 用户 review 时指出 "@description 里塞版本更新记录太臃肿了,这是最佳实践规范吗?"
+  - 是 anti-pattern。v1.15.15 的 @description 已经膨胀到 1833 字符 / ~1222 字
+    （把 v1.14.9 ~ v1.15.15 共 14 个版本 changelog 全塞进单行 description,平均每版加 ~130 chars）,
+    每加一个版本就往上堆,典型的"渐进式膨胀失控"。
+  - 最佳实践（参考 npm / browser extension / VS Code extension / userscripts 主流项目）:
+    @description 只写 1-3 句功能描述,变更历史归 CHANGELOG.md / GitHub Releases。
+    @description 应当跟 GitHub README 顶部对齐 — 简洁、卖点、不被 changelog 噪音污染。
+  - 修法: @description 改成 240 字符,只保留 6 项核心信息:
+    ① 1 句功能描述
+    ② 4 大卖点（完全本地 / 无订阅 / 无需 API key / 隐私优先）
+    ③ 多站点支持（DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝）
+    ④ 玻璃拟态 UI
+    ⑤ IMA / Obsidian 等任意 Markdown 友好工具推送
+    ⑥ locale-aware 文件名（zh = 聊摘, 其他 = ChatDigest）+ "变更历史见 CHANGELOG.md" 引导
+  - 0 行为变化,纯 metadata 清理,代码本身 0 改动
+  - V8 仿真整段 IIFE 跑通（zh-CN + en-US）,菜单注册、IIFE 顶部 "report bug" 兜底、
+    SUMMARY_PROMPT try/catch fallback、waitBody 全部正常
+  - @version 由 1.15.15 升到 1.15.16。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+  - **最佳实践笔记**: userscript / npm package / browser extension / IDE plugin 任何
+    metadata 字段（@description / package.json description / extension marketplace description）
+    在每次发版前 grep 长度, > 500 chars 立即 trim;变更历史永远归 CHANGELOG.md,不塞进 metadata 字段。
+
+【脚本 v1.15.15】终极保险 — IIFE 顶部立刻注册"report bug"菜单项(hardcoded label),整个主流程包 try/catch（2026-07-18）
+  - 用户反馈 v1.15.14 后"啥也不出来 + 开关也没了 + 完全崩了"——根因 = Tampermonkey 缓存 + 默默 disable:
+    v1.15.11/12 的 ReferenceError 让 Tampermonkey 标 disabled,即使 @version 升 1.15.13/14 也不自动重 fetch + re-enable;
+    同时任何 module-level throw 都会让 registerPushMenu / initUI 跑不到 → 菜单丢 + FAB 不显示。
+  - 修法（v1.15.13/14 之上,前 2 个 fix 仍有效,这是终极保险, 不替换）:
+    · ① IIFE 顶部 try { GM_registerMenuCommand('ChatDigest: report bug (open F12 console)', ...); } catch(_){}
+      —— hardcoded label,不依赖 t()/MSGS/SITE/PUSH_STORAGE,即使后续 throw 菜单也保留
+    · ② 整个主流程包 try { ... 原 IIFE 全部代码 ... } catch(e) {
+        alert('FATAL: ' + e.message + ' Stack: ' + e.stack.split('\n').slice(0,3).join('\n') + ' Copy this to developer.');
+        console.error('[ChatDigest FATAL]', e);
+      }
+      —— 任何 module-level throw 都被抓住 + alert 弹窗告诉"具体什么挂了"
+  - 设计原则："重要的事不能黑盒"——i18n 失败、其他 throw 都不能让用户面对"啥也不出来"。
+    给用户一个明确信号:有 throw → 弹窗告诉具体错;无 throw → 菜单至少 1 项 "ChatDigest: report bug"。
+  - V8 stress test 已验证:
+    · 模拟 v1.15.11 TDZ throw 状态 → v1.15.15 catch 住 + 菜单仍注册成功
+    · 正常情况(无 throw) → 终极保险不干扰,IIFE 跑通,菜单 + FAB 正常
+  - 用户实操清单（**必做**,按顺序）:
+    ① Tampermonkey 仪表盘 → 找 "ChatDigest / 聊摘" → 看 status（disabled 需 enable）→ 看 version 是不是 1.15.15
+    ② F12 → Console → 切到 ChatDigest 那行 → 确认 0 个 uncaught error 红字
+    ③ FAB(📑) 一键导出 → 触发总结咒语注入 + 发送 + 等待 + 自动保存
+    ④ 若①②③任一失败 → Tampermonkey 仪表盘 → 删除 ChatDigest →
+       把 E:\Projects\ChatDigest\chatdigest.user.js 重新拖入 → 强制刷新 DeepSeek 页面 →
+       再看 F12 Console,若有 [ChatDigest FATAL] 弹窗或红字,直接整段贴回给我
+    ⑤ **force reload 后仍 fail** → 试 Chrome/Edge incognito 模式装一次（绕开所有 cache）,
+       若 incognito 也 fail 则问题在文件本身,贴 F12 红字给我
+  - @version 由 1.15.14 升到 1.15.15。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+
+【脚本 v1.15.14】防御性 fallback — SUMMARY_PROMPT 求值加 try/catch 兜底到硬编码中文 prompt（2026-07-18）
+  - 用户反馈 v1.15.13 后"插件完全运行不起来了"——根因是 **Tampermonkey 缓存**：
+    v1.15.11/12 时代码 throw ReferenceError 把整个 IIFE 挂掉，
+    v1.15.13 修了 ordering 但 @version 升级不一定触发 Tampermonkey 重新 fetch + execute
+    旧 cache（尤其禁用自动更新、或版本变更被 dedup 的场景），
+    所以用户实际可能仍卡在 v1.15.11/12 的 broken 版本。
+  - 修法（v1.15.13 fix 之上的"双保险"，不替换 v1.15.13）：
+    · const SUMMARY_PROMPT = t('summaryPrompt') 加 try/catch 包裹
+    · 任何 throw（MSGS 还没初始化完 / t() 内部抛错 / 未来再有 ordering 问题）
+      都 console.error 详细原因 + fallback 到硬编码中文 prompt
+    · Fallback 内容：从 MSGS.zh['summaryPrompt'] 一字不差复制
+  - 设计原则："prompt 是功能,不是装饰"——i18n 失败时降级显示原文而非让用户看到 undefined。
+    toast/UI 是"装饰",SUMMARY_PROMPT 是"指令"——只有"用户输入"的装饰性文本可以 fallback 到 key,
+    SUMMARY_PROMPT 必须 always-work。
+  - 用户实操清单（**必做**，按顺序）：
+    ① Tampermonkey 仪表盘 → 找到 "ChatDigest / 聊摘" → 看显示版本是不是 1.15.14
+    ② F12 Console → 切到 ChatDigest 那行 → 确认 0 个 ReferenceError 红字
+    ③ FAB(📑) 一键导出 → 触发总结咒语注入 + 发送 + 等待 + 自动保存
+       （不是按字面 text "summaryPrompt"，也不是 console 报错）
+    ④ 若①②③任一失败 → Tampermonkey 仪表盘 → 删除 ChatDigest →
+       把 E:\Projects\ChatDigest\chatdigest.user.js 重新拖入 → 强制刷新 DeepSeek 页面
+  - V8 仿真已确认：
+    · v1.15.14 完整 IIFE 跑通（zh-CN + en-US）
+    · ordering 0 issue
+    · stress test 模拟 v1.15.11 ordering bug + v1.15.14 try/catch —— fallback 生效、整个 userscript 不挂
+  - @version 由 1.15.13 升到 1.15.14。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+
+【脚本 v1.15.13】hotfix — 修复 v1.15.11/v1.15.12 ReferenceError 导致 userscript 完全无法加载的回归（2026-07-18）
+  - 用户反馈："插件完全运行不起来了"。
+  - 根因：v1.15.11 引入 const SUMMARY_PROMPT = t('summaryPrompt')（用 t() 取中英 prompt），
+    但写在 L1001，而 t() 函数和 MSGS 字典在 L1189/L1097 才定义。脚本加载到 SUMMARY_PROMPT
+    时 t/MSGS 还没定义 → throw ReferenceError → 整个 userscript 挂掉。
+  - 为什么不修：JS 端 0 单测，pytest 139 PASS 完全没覆盖这个 ordering 问题。
+    ordering / 加载顺序问题只能靠人肉验证——**用户实测**才发现。
+  - 修法（最小侵入）：
+    · 把 const SUMMARY_PROMPT = t('summaryPrompt') 从 L1001 移到 L1211（紧跟 function t() 之后）
+    · 原 L1001 位置只留注释占位 + ordering constraint 提醒
+    · t() 函数注释里加 v1.15.13 ordering 提醒
+  - 关键不变量：SUMMARY_PROMPT = t('summaryPrompt') 仍是 module-load-time 求值（IIFE 顶层）
+  - 手动验证清单（**必做**，pytest 139 PASS 不够）：
+    ① 安装/更新 userscript → Tampermonkey 菜单显示 ChatDigest 1.15.13（无红字报错）
+    ② 点 FAB（📑）→ 应触发总结咒语自动注入 + 发送 + 等待 + 保存（不是按字面 text "summaryPrompt"）
+    ③ 任意 toast 出现（点 FAB 后的"已注入"等），不是 undefined 或红字
+  - 教训：i18n 这种"新增 module-load-time 函数依赖"改动必须人工验证——
+    pytest 只能覆盖 Python 端纯函数，JS 端 ordering / 加载顺序问题只能靠人肉。
+  - 未来防御（候选，不在 v1.15.13 scope）：
+    tests/test_js_pure_equivalents.py 加一个"static analysis"测试，
+    扫描 const X = f() pattern、确认 f 在 X 之前定义，能在 CI 阶段挡住 80% 这类 ordering bug。
+  - @version 由 1.15.12 升到 1.15.13。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+
+【脚本 v1.15.12】i18n 修 — 缺 key 时不跨语言回退（2026-07-18）
+  - 用户 review v1.15.11 后指出设计原则：「无法判断语言的话回退为en，避免看不出中文的尴尬」。
+  - v1.15.11 t() 的 bug：MSGS[lang][key] 找不到时会回退到 MSGS.zh[key]——
+    英语用户看到 en 缺 key 时自动显示中文，正好是「尴尬」场景。
+  - 修法：t() 改成不跨语言回退——当前 locale 缺 key 时直接返回 key 字符串（开发者显眼、便于排查翻译缺漏）。
+  - 关键设计原则：default = en，中文是特殊情况。
+    · 语言检测由 isChineseLocale() 决定（zh / zh-CN / zh-TW / zh-HK → zh，其他 → en；语言无法判断时自动走 en 路径）
+    · 缺 key 时返回 key 字符串，**绝不**把对方语言推给当前用户
+    · 强迫翻译者补全而非让用户看到对方语言
+  - 关键不变：MSGS.zh / MSGS.en 字典 0 改动（仍 38 keys × 2 langs）
+  - 手动验证清单：
+    1) zh-CN 用户 + MSGS.zh 缺 key → 显示 key 字符串（不串到 en）
+    2) en 用户 + MSGS.en 缺 key → 显示 key 字符串（v1.15.11 会串到 zh，v1.15.12 不再）
+    3) zh-CN + MSGS.zh 有 key + MSGS.en 缺 key → 显示中文（行为不变）
+    4) en + MSGS.en 有 key + MSGS.zh 缺 key → 显示英文（行为不变）
+  - 为什么 default = en：项目起源于中文，但目标用户是全球（GitHub 公开后海外/国内用户都有），
+    en 是国际通用语；「遇歧义默认 en」是开源项目标准实践（Linux kernel / npm / Python 等都遵循）。
+  - @version 由 1.15.11 升到 1.15.12。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+
+【脚本 v1.15.11】i18n — 所有 user-visible 文案按浏览器 locale 中英双语（2026-07-18）
+  - rebrand 真正的完结篇——名字（v1.15.9）+ 描述（v1.15.9）+ 文件（v1.15.10）+ locale（v1.15.10）+ 文案（v1.15.11）5 套就绪。
+  - 新加 MSGS 字典 + t(key, params?) helper：
+    · MSGS = { zh: { ... }, en: { ... } } 维护 38 个 key × 2 langs = 76 条翻译
+    · t(key, params?) 按 isChineseLocale() 选语言，{name} 占位符做参数替换
+  - 5 大类文案全本地化：
+    ① UI panel（4 键：title fallback / 3 按钮）
+    ② toast（24 键：24 个 toast() 调用全用 t()）
+    ③ console（4 键：startup / 3 个 console.error/warn）
+    ④ alert（2 键：initFailed + initFailed.detail）
+    ⑤ SUMMARY_PROMPT（1 键：中英两个版本，zh 是源 / en 是 translation）
+  - 关键设计原则（参考通用 i18n 架构）：
+    ① source language (zh) 也走字典（不 hardcode,translator 拿到 zh 字典就能翻 en）
+    ② 一致性 > 亲切感（translator 无需读源码）
+    ③ {name} 占位符而非 JS 模板，translator 看到的是可读字符串
+    ④ 找不到 key 回退到 key 本身（开发期显眼，不静默吃掉）
+    ⑤ 找不到 locale 回退 zh
+  - 3 套查找/替换机制：找到 key → 用；en 字典缺漏 → 静默回退 zh；都缺 → 返回 key。
+  - 关键不变量：SUMMARY_PROMPT = t('summaryPrompt') 在 script 加载时求值一次（IIFE 顶层），
+    后续 setInputValue/autoSend 用的是该常量。SOFTWARE_NAME 同理。切语言需刷新页面。
+  - 0 行为变化：纯文案改写，所有逻辑路径不变。
+  - 0 测试覆盖：JS 端 0 测试，locale 探测 + 翻译都是 runtime。
+  - 手动验证清单：
+    ① zh-CN 浏览器 → 所有 toast/UI 中文、SUMMARY_PROMPT 中文、AI 输出中文
+    ② en-US 浏览器 → 全英文、SUMMARY_PROMPT 英文、AI 输出英文
+    ③ zh-CN 但切到 en-US → 全英文（下次启动）
+    ④ 翻译缺漏 → 自动回退 zh（不静默报错）
+    ⑤ navigator.language 为空 → 回退 zh（安全默认）
+  - @version 由 1.15.10 升到 1.15.11。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+
+【脚本 v1.15.10】locale-aware SOFTWARE_NAME + 文件重命名（2026-07-18）
+  - rebrand 完结篇——名字 + 描述 + 文件 + locale 全套就绪。
+  - 新加 isChineseLocale() helper + SOFTWARE_NAME 改为 isChineseLocale() ? '聊摘' : 'ChatDigest'：
+    · 检测规则：navigator.language / navigator.languages 任一以 'zh' 开头（zh / zh-CN / zh-TW / zh-HK 等）→ 中文
+    · 其他语言（en / ja / ko / ...）→ 英文
+  - 4 处 live code 同步跟随 SOFTWARE_NAME 值：
+    ① 导出文件名（聊摘_DeepSeek_2026-07-19_xxx.md vs ChatDigest_DeepSeek_*.md）
+    ② YAML frontmatter tags 字段（保持文件名内 + 文件内一致）
+    ③ UI panel 标题（CN 系统显示「聊摘 · DeepSeek」，其他「ChatDigest · DeepSeek」）
+    ④ Tampermonkey 自动更新通知（@version 触发）
+  - 0 override 机制：按用户决议保持简单，浏览器/系统切语言后下次启动自动跟随；
+    如需手动锁定留给未来（v1.15.11 / v1.16 再说）。
+  - 脚本文件重命名：chat2knowledge.user.js → chatdigest.user.js
+    （未发布用户重命名 0 成本；已安装用户不受影响，他们用的是 v1.15.9 之前的脚本）。
+  - 测试改动：tests/test_js_pure_equivalents.py::TestBuildFileName 5 个 case 的
+    software_name 参数和 expected output 从 Chat2Knowledge → ChatDigest（仅示例数据更新、
+    buildFileName 函数本身不变）；TestDeriveTitle 0 改动（derive_title 用时间戳锚点、
+    不依赖前缀字符串）。
+  - 关键不变量：derive_title 用时间戳（YYYY-MM-DD_HHMM）做锚点取其后内容——
+    Chat2Knowledge_*.md（v1.15.9 之前）+ ChatDigest_*.md（v1.15.9）+ 聊摘_*.md（v1.15.10+）
+    三种前缀都正确提取，旧用户文件 0 迁移成本。
+  - 0 测试覆盖：locale 探测是浏览器 runtime、Python 测不出；**手动验证清单**：
+    ① zh-CN locale 浏览器：安装 chatdigest.user.js → 触发导出 → 文件名以 聊摘_ 开头，
+       YAML tags 字段值是 聊摘，UI panel 标题显示「聊摘 · DeepSeek」
+    ② en-US locale 浏览器：同操作 → 文件名 ChatDigest_ 开头，tags ChatDigest，标题 ChatDigest · DeepSeek
+    ③ 日文 ja-JP locale：同操作 → 走英文分支（en 系列外都走 ChatDigest）
+  - LICENSE / README / notes / tampermove 文档同步：LICENSE 保持 ChatDigest Contributors
+    （法律/技术文档不分 locale、全局统一）；README 加 1 段说明 locale 行为 + 改 6 处文件名引用。
+  - @version 由 1.15.9 升到 1.15.10。Python 工具链不动（IMATOOLS_VERSION 仍 1.2.8）。
+
+【脚本 v1.15.9】rebranding —— 项目正式更名为 ChatDigest / 聊摘（2026-07-18）
+  - 旧名 Chat2Knowledge（直白但无品牌感）→ 新名 ChatDigest（英文，digest = 摘要/消化，
+    暗合「注入总结咒语让 AI 重组织」独特卖点）+ 聊摘（中文 2 字压缩、「聊」动作+「摘」结果）。
+  - 4 大核心差异化卖点写进 hero 描述（之前描述里没强调）：
+    ① 完全本地（浏览器内完成、对话不离开设备）
+    ② 零订阅（永久免费、无会员体系）
+    ③ 零 API key（核心导出零配置零网络；可选推送 ima 用自己申请的 IMA 官方 OpenAPI 凭证）
+    ④ 隐私优先（不上传对话到任何第三方）
+  - 多导出目标：ima（已实现）+ Obsidian（计划中）+ 任意 Markdown 友好工具。
+  - 改名范围（11 处 live code + 6 处 docs 全部同步）：
+    · chat2knowledge.user.js：@name / @namespace (https://github.com/chatdigest) /
+      @version (1.15.9) / @description (新 hero 句 + 4 大卖点 + v1.15.9 trace) /
+      @author (ChatDigest Contributors)
+    · user.js 内部：SOFTWARE_NAME = 'ChatDigest'，加注释说明「旧 Chat2Knowledge_*.md
+      文件仍可被 derive_title 正确解析(时间戳锚点 + 不依赖前缀)」
+    · user.js UI / console / alert 全部 Chat2Knowledge → ChatDigest
+    · LICENSE copyright: 2026 Chat2Knowledge Contributors → 2026 ChatDigest Contributors
+    · README.md 加 hero section + 6 处文件名/SOFTWARE_NAME 引用更新
+    · tools/ima_upload.py / tools/ima_watcher.py 头部 docstring + argparse 描述
+    · tools/ima_config_sample.ini / ima_config.ini 文件路径示例
+    · tools/requirements.txt 顶部注释
+  - 0 行为变化：derive_title 用时间戳锚点（YYYY-MM-DD_HHMM）取其后内容，不依赖前缀，
+    新 ChatDigest_*.md 和旧 Chat2Knowledge_*.md 都正确提取，旧用户文件 0 迁移成本。
+  - 0 测试变化：test_ima_upload.py 测试用 "Chat2Knowledge_*.md" 作为输入数据
+    （仅示例数据,函数锚点是时间戳不依赖前缀）,139 PASS 不变。
+  - GitHub 仓库名建议 chatdigest（@namespace 已更新）；Tampermonkey 脚本文件名
+    chat2knowledge.user.js 保持不变（避免已安装用户重新安装，@name 字符串就是 ChatDigest）。
+  - IMATOOLS_VERSION 不动（1.2.8 仍最新，rebranding 是 JS 端 branding 改动不是工具链改动）。
+  - @version 由 1.15.8 升到 1.15.9。
+
+【脚本 v1.15.8】单条消息导出按「知识库文章」语义去掉思考块,导出全部对话保留（2026-07-18）
+  - 用户实测：📑 一键导出（FAB）和 📥 导出最新回复导出的「最后回复」包含 DeepSeek 的
+    > 💭 思考过程 引用块——思考是 AI 推理过程、不是知识库文章内容，作为 KB 文章应去掉更 relevant。
+  - 修法：messageToMd(node, opts) 加 opts.includeThinking 参数（默认 true 保持向后兼容），
+    getLatestReply(opts) 透传；4 个「单条消息导出」路径全部传 { includeThinking: false }：
+    ① FAB waitAndAutoSave（一键导出 KB 文章）
+    ② 📥 导出最新回复 菜单按钮
+    ③ 📋 复制最新回复 菜单按钮
+    ④ Ctrl+Shift+S 快捷键
+  - 「导出全部对话」(exportAll / act === 'all' / Ctrl+Shift+A) 不动——它走
+    messageToItem/messageToMd 默认路径（不传 opts,保持 true），思考 trace 对理解对话有用。
+  - 判断写法 opts.includeThinking !== false 而非 truthy——保证 opts === undefined / {} 时
+    也走 true（向后兼容，任何外部调用方如浏览器 console 直接调 getLatestReply() 都保持旧行为）。
+  - 注意：JS 端无单测覆盖，验证靠手动（FAB 一次 + 📥 导出最新回复一次，确认 0 个
+    > 💭 思考过程 块；再跑 📚 导出全部对话一次，确认思考块仍在）。
+  - @version 由 1.15.7 升到 1.15.8。Python 工具链不动（v1.2.8 仍最新）。
+
+【脚本 v1.15.7】提 MD_SOURCE_LANGS 模块顶部常量统一 3 处「源码围栏解包」列表（2026-07-18）
+  - 审 blockToMd 与 unwrapSourceFences 时发现 3 个 inline 列表含义完全一样但内容重叠 + 顺序不一致 + 列表大小不同：
+    · blockToMd pre 路径      : mdDumpLangs  = ['markdown','md','plaintext','text','txt']                       (5)
+    · blockToMd md-code-block : UNWRAP_LANGS  = ['markdown','md','text','plaintext','txt','plain','english','eng']  (8)
+    · unwrapSourceFences       : srcLangs     = ['plaintext','text','markdown','md','txt']                       (5)
+  - v1.15.6 当时判断差异「有意」（pre 不解包 plain/english/eng）保留；本轮用户 review 后决定
+    反正 plain/english/eng 实际就是「这不是真代码、是文本」的信号，统一解包是正确行为。
+  - 修法：抽到模块顶部 const MD_SOURCE_LANGS = ['markdown','md','plaintext','text','txt','plain','english','eng']
+    （8 项并集），3 处共用。
+  - isUiChrome 的语言 regex 不合并（语义不同：DOM 遍历跳过语言标签 chrome，覆盖范围更广含真代码语言）。
+  - 轻微行为变化（非 regression）：pre 块 + unwrapSourceFences 现在也会解包 plain/english/eng 语言围栏。
+  - @version 由 1.15.6 升到 1.15.7。Python 工具链不动（v1.2.8 仍最新）。
+
+【脚本 v1.15.6】提 wrapFencedCode() 工具函数消除 pre / md-code-block 重复（2026-07-18）
+  - 审 blockToMd 时发现 pre 块路径与 md-code-block 路径末尾 2 行完全一样：
+      const fence = '`'.repeat(fenceLen(text));
+      return '\n' + fence + lang + '\n' + text + '\n' + fence + '\n';
+  - 修法：新增 wrapFencedCode(text, lang) helper（紧贴 fenceLen 定义），2 处调用点改成单行
+    return wrapFencedCode(text, lang);。
+  - 纯重构，行为 100% 等价（fenceLen 算法 + 围栏拼接顺序都不变）。
+  - UNWRAP_LANGS 列表保留差异（pre 5 / md-code-block 8 含 plain/english/eng）——
+    不在本次重构范围，跨路径合并 UNWRAP_LANGS 是行为变化（让 pre 也解包 english 源码块）而非单纯 DRY。
+  - 改动量：净 -2 行（3 行定义 + 2 行重复 → 3 行定义 + 2 行调用）；可读性 +1。
+  - fenceLen Python 复刻版未变，pytest 仍 139 PASS。
+  - @version 由 1.15.5 升到 1.15.6。Python 工具链不动（v1.2.8 仍最新）。
+
+【脚本 v1.15.5】toast 错误分级——critical 错误改持续显示+点击关闭（2026-07-18）
+  - 之前所有 toast('⚠️ ...', 'warn') 都 2.6s 自动消失，导致 critical 错误（凭证/网络/超时/
+    找不到输入框/等待 AI 超时/导出失败/没抓到内容等）一闪而过、用户根本没注意。
+  - 修法：
+    · 新增 toast 第 3 种类型 'error'（CSS 红边 #c2k-toast.error { border-color: rgba(255,80,80,.6); }），
+      区别于 .warn 橙边。
+    · toast() 函数检测 type === 'error' 时跳过 2.6s auto-dismiss timer，改设 pointer-events:auto +
+      cursor:pointer + title:'点击关闭' + onclick 关闭——sticky 显示、用户点掉。
+    · 审计 13 处 'warn' 调用，**全部**都是 critical（没有一个是「小提示」级别），统一改成 'error'。
+    · ok / 进度 toast 不动（✅ 已下载 / ⏳ 正在滚动 / ✨ 已注入 / 🚀 已发送 / ☁️ 已推送 / ⏳ 等待生成
+      等都是确认/进度，2.6s auto-dismiss 合理）。
+  - 13 处 critical 分类：
+    [1]  滚动未到顶（导出部分丢失）
+    [2]  没抓到内容（download 静默失败）
+    [3]  没抓到内容（copy 静默失败）
+    [4]  没可导出对话
+    [5]  导出失败带 err.message
+    [6]  当前环境无 GM_xmlhttpRequest
+    [7]  IMA 推送返回非 2xx
+    [8]  IMA 推送网络失败（ima_watcher.py 未起）
+    [9]  IMA 推送超时
+    [10] 当前站点未适配
+    [11] 找不到输入框
+    [12] 等待 AI 回复超时（2 分钟未检测到）
+    [13] 等待超时（2 分钟兜底分支）
+  - 'warn' 类型保留在 CSS 里（无 active caller，但留着以备未来真有「2.6s 就够」的场景）。
+  - @version 由 1.15.4 升到 1.15.5。Python 工具链不动（v1.2.8 仍最新）。
+
+【Python 工具 v1.2.8】~/ user-facing 字符串统一成 Windows 标准 %USERPROFILE% 写法（2026-07-18）
+  - 审 ima_upload.load_credentials() 时发现 user-facing 字符串散落着 ~/.config/ima/... 与 ~/Downloads。
+    Windows 是本项目主要用户群，但 user-facing 同时混用 ~/（Linux 习惯） 和 %USERPROFILE%——首次
+    Windows 用户看到 ~/ 会困惑（cmd 里 ~ 不是内置变量，bash 才有）。
+  - 修法（最小侵入，0 行为变化）：
+    · 所有 user-facing 字符串统一成 %USERPROFILE% 风格（Windows 是主要读者群）。
+    · Mac / Linux 写法以「等价说明」/「注释」形式跟在 Windows 块后面。
+    · Python 内部实现继续保留 os.path.expanduser('~')（跨平台标准、行为不变）。
+    · argparse help 里用 %%USERPROFILE%% 转义 argparse 的 %(...)s 字符串替换（Python 3.14+ 严格化），
+      输出仍为 %USERPROFILE%。
+    · 模块 docstring / load_credentials 报错里 %USERPROFILE%\.config\ima\... 用 \\ 双重转义避免
+      Python 3.12+ SyntaxWarning（invalid escape sequence '\D' '\c' '\i'）。
+  - 覆盖范围（全部 user-facing 字符串）：
+    · tools/ima_upload.py: 模块 docstring + load_credentials 报错（Windows 块 + Mac/Linux 注释）
+    · tools/ima_watcher.py: 模块 docstring + argparse help（仍无则默认 %USERPROFILE%\Downloads）
+    · README.md: 「0. 一次性准备」段重构（Windows 段放前、Mac/Linux 段随后、末尾加「三者等价」note）
+    · tools/ima_upload_notes.txt: 版本记录 + 优先级说明的默认路径
+    · tools/ima_config_sample.ini / tools/ima_config.ini: SRC 注释
+  - 3 个 bat 字节审计：grep 全部 bat 确认 0 处 ~/ / expanduser / .config\ima 残留
+    （bat 里的 ~ 是 %~1 / %~dp0 参数展开语法，跟 home dir 无关）。
+  - pytest tests/ 仍 139 passed 行为不变。ima_watcher --version 输出 1.2.8。
+  - 纯字符串 cosmetic，0 代码逻辑变化。IMATOOLS_VERSION 由 1.2.7 升到 1.2.8。脚本不动。
+
+【Python 工具 v1.2.7】immutable modules 修复——set_min_interval setter + C2KServer 子类（2026-07-18）
+  - 审 ima_watcher.py 时定位 P3.15「immutable modules 内部状态被外部修改」两处私有 hack：
+    ① ima_watcher.py 与 ima_upload.py 自己的 main() 都做
+       ima_upload._MIN_INTERVAL = max(0.0, args.min_interval)——直接写另一 module
+       的下划线开头变量，IDE 不识别为公开 API、改名易漏改、调试栈不直观。
+    ② IngestHandler._app() 读 self.server._c2k（type: ignore[attr-defined]），
+       run_serve_mode 做 httpd._c2k = {...}——给 HTTPServer 实例挂私有属性
+       注入 handler 状态，HTTPServer 不知道 c2k_config 存在。
+  - 修法（最小侵入）：
+    · ima_upload.py 加 set_min_interval(value) / get_min_interval() 公开 setter/getter
+      （_MIN_INTERVAL 保留为内部状态实现细节；setter 内 max(0.0, float(value)) 复刻旧 clamp）。
+    · ima_upload.py 与 ima_watcher.py 的 main() 都改用 set_min_interval(args.min_interval)。
+    · ima_watcher.py 加 class C2KServer(HTTPServer): ... self.c2k_config = {...}
+      显式子类，IngestHandler._app() 改读 self.server.c2k_config，
+      run_serve_mode 用 C2KServer(..., watch_dir=..., kb_id=...) 一步实例化。
+  - 新加测试 TestSetGetMinInterval 3 case：默认 1.5s、setter 写入可读回、负值 clamp 到 0。
+  - pytest tests/ -v 报 139 passed in 0.28s（136 + 3）。ima_watcher --version 输出 1.2.7。
+  - 纯架构改进，0 行为变化（仅外部写法从私有赋值变公开 setter/private 属性变子类 attribute）。
+  - IMATOOLS_VERSION 由 1.2.6 升到 1.2.7。脚本不动。
+
+【脚本 v1.15.4】扩 cleanCitations 字符类覆盖面（2026-07-18）
+  - v1.14.7 引入的 cleanCitations 用 3 个 regex 清洗 DeepSeek 引用角标残迹，
+    但字符类不完整：只覆盖 hyphen + en-dash，AI 常用 em-dash（—）和
+    minus sign（−）漏洗；标点只全角，半角 . , ; : ! ? 漏洗；regex 3
+    只匹配 [A-Za-z]+ 不含数字，Figure-3 / 123-示意图 漏洗。
+  - 4 处扩展：
+    ① 短横字符类从 [-–] 扩到 [-–—−]（加 em-dash + minus sign）
+    ② 标点字符类从全角扩到全角+半角（[。、：，；！？.,;:!?]）
+    ③ regex 3 从 A-Za-z 扩到 A-Za-z0-9
+    ④ 中→英方向**故意不加**（保守：可能是用户正常用语如"第1章-Introduction"）
+  - bug 行为 vs 新行为：原版 权威——。/ 权威−。/ 权威--,/ 123-示意图
+    都漏洗；v1.15.4 全部清洗。
+  - 新增 7 个 TestCleanCitations case 覆盖边界（em-dash / minus sign /
+    半角 / 数字+中文 / 中→英不洗 / 英文术语不洗 / 短横后空格不洗）；
+    pytest 129 → 136 PASS。
+  - Python 复刻版 _js_clean_citations 同步更新（行为完全等价）。
+  - 附 P2.13 / P2.14 trace：本轮一并审查 setInputValue 是否保留原内容
+    （P2.13）和 buildFileName 缓存（P2.14），结论都是当前实现是
+    合理设计——前者避免影响咒语效果（用户一般是确定要导出才按一键），
+    后者效率低但安全（避免缓存与文件名变化不同步）。不写代码。
+  - @version 由 1.15.3 升到 1.15.4。
+
+【脚本 v1.15.3】JS 脚本头部 @author 改为 Chat2Knowledge Contributors（2026-07-18）
+  - 纯元数据修正——之前是 Senior Developer（初始开发者的个人署名），
+    现在改成 Chat2Knowledge Contributors 与 v1.2.6 新增的 LICENSE 文件
+    copyright "2026 Chat2Knowledge Contributors" 对齐，项目归属感从
+    「个人」转为「项目」。
+  - 功能完全不变（仅 user.js 头部 metadata），但显式 bump 留下 trace，
+    让 reviewer 知道这是有意调整（不是 git history 残留）。
+    Tampermonkey update 通知会触发，提示用户"归属变更"——这正是
+    bump 的价值所在（让用户感知到元数据变化）。
+  - Python 工具链不动（v1.2.6 仍最新）。
+  - @version 由 1.15.2 升到 1.15.3。
+
+【Python 工具 v1.2.6】LICENSE 文件 + type hints + CHANGELOG summary 行（2026-07-18）
+  - ① 新增根目录 LICENSE（MIT License 标准文本，copyright 2026
+    Chat2Knowledge Contributors），跟 chat2knowledge.user.js 头部的
+    @license MIT 对齐——之前只有脚本头部声明，根目录无 LICENSE 文件，
+    GitHub 上不显示 license badge，fork 者不确定能怎么用。
+  - ② ima_upload.py 全部 14 个函数加 type hints（参数 + 返回类型），
+    用 from __future__ import annotations + Python 3.10+ 语法
+    （str | None 替代 Optional[str]、tuple[str, str] 替代 Tuple[str, str]）；
+    用 inspect.signature 验证所有 annotation 是合法 Python 表达式、
+    pytest 129 PASS 行为不变。
+  - ③ CHANGELOG 顶部加「Latest: v1.15.2（脚本） / v1.2.6（Python 工具链）」
+    summary 行 + Last 3 个版本号速查——之前 CHANGELOG 38KB / 60+ 条目，
+    无法快速定位最新版本。
+  - 纯代码质量/法律/UX 改进，0 行为变化。IMATOOLS_VERSION 由 1.2.5
+    升到 1.2.6。脚本不动。
+
+【脚本 v1.15.2】waitAndAutoSave + exportAll 进度反馈 + 最小等待 5s（2026-07-18）
+  - ① waitAndAutoSave（一键导出后的"等待生成"循环）原 toast 只显示
+    「正在等待 DeepSeek 生成完成…」一直不动、用户不知道是死循环还是
+    真的在等；现在每 5s 更新一次 toast 显示「⏳ 等待生成中…(已等 Xs)」。
+  - ② 最小等待 5s（MIN_WAIT = 5000）：原逻辑「文本稳定 2 次 + 停止按钮
+    消失」就触发保存，但 AI 刚发送完咒语就开始生成时（<1s），DOM 里
+    的「已思考（用时 X 秒）」状态文本会先稳定 2 次后 AI 才开始输出真实
+    答案——现在加 MIN_WAIT 至少等 5s 才认完成，避免抓到「刚开始生成」
+    的极短内容。
+  - ③ exportAll 滚动收集加进度反馈：collectFullConversation 3 个
+    pass（顶部 / 底部 / 兜底扫描）+ 5 个 grab() 调用各传 pass 参数
+    1/2/3；exportAll 创建 onProgress 回调，每 1.5s 最多更新一次 toast
+    显示「⏳ 正在滚动收集…(顶部/底部/兜底阶段,已收集 N 条,key X~Y,Ns)」——
+    之前无反馈，30+ 次滚动让用户以为脚本卡死。
+  - 跟 P1.5 (timeout)、P1.7 (dead code) 思路一致：纯前端 UX 改进，
+    无外部依赖。Python 工具链版本不动（v1.2.5）。
+  - @version 由 1.15.1 升到 1.15.2。
+
+【脚本 v1.15.1】删 extractMarkdown 无意义别名（2026-07-18）
+  - 审计发现 extractMarkdown 不是 dead code（messageToMd 里 4 处调用：
+    用户分支 / AI 答案 / AI 答案兜底 / 思考），但**是无意义间接**——
+    函数体就是 return blockToMd(node)，注释承诺「兼容别名 + 统一规整：
+    折叠多余空行、去除行尾空白」但实际规整在 normalizeMd 里、这里只
+    return 别名。「注释撒谎」是 dead code 的另一种形式——留着会误导
+    未来读者以为有规整逻辑。
+  - 删函数 + 改 4 处调用点为直接 blockToMd(node) + 删悬空注释。
+    行为完全等价（机械替换），0 风险。
+  - Python 复刻测试套件本来就没复刻 blockToMd（v1.2.3 时已说明
+    drift 风险高、跳过），这次清理不需改测试。
+  - @version 由 1.15.0 升到 1.15.1。
+
+【Python 工具 v1.2.5】HTTP 桥 /ingest 接收端加 IP 滑动窗口限流（2026-07-18）
+  - 每个 client_ip 1 分钟内最多 30 次推送，超限返回 HTTP 429 + 控制台
+    [RATELIMIT] 日志。自用场景（127.0.0.1 监听）攻击面小但仍加这层保护：
+    ① 防止 watcher 自己的循环 bug 把同一文件反复 ingest
+    ② 防止未来加多 tab 抓取时不小心刷爆
+    ③ 防止恶意 tab 灌入垃圾。
+  - 与现有 ima_upload.upload_file_to_kb 的「上传节流」（1.5s 间隔、
+    防 IMA 风控）职责独立、互补——一个管出去、一个管进来。
+  - 实现：模块级常量 _RATE_LIMIT_PER_MIN = 30 + dict 存 bucket
+    （按 client_ip 索引时间戳列表）+ Lock 保护多线程并发请求。
+  - 纯函数版本 _check_rate_limit(client_ip, now, buckets, limit, window_s)
+    参数显式便于测试；线程安全 wrapper _check_rate_limit_thread_safe()
+    加默认参数 + 当前 monotonic 时间给 HTTP handler 用。
+  - IngestHandler.do_POST 在 URL 校验后、JSON 解析前插入限流检查
+    （无效 URL 不消耗配额，但无效 JSON 也消耗，避免恶意 400 探测打满）。
+  - 顺手修一个潜在 bug：do_POST 原先没 try/except 包 ingest_content，
+    HTTP 模式下 load_credentials 抛的 SystemExit 会被 BaseHTTPRequestHandler
+    默认处理杀掉整个 watcher 进程。现在跟 watcher 模式一致，加 try/except
+    接住 SystemExit/Exception 并返回 5xx，让 watcher 继续 serve。
+  - 端到端验证：启动 watcher + 跑 32 个 POST 请求，#1-#30 全部进入 ingest
+    流程（无凭证返回 500 但限流未触发），#31/#32 正确返回 429 +
+    "rate limit exceeded (30/min)"。
+  - 脚本侧 pushToIma 的 onload 自动处理 429（r.status >= 300 走 else
+    → 弹 "⚠️ IMA 推送返回 429"），不需要改 user.js。
+  - 新增 tests/test_ima_watcher.py（12 个 case：9 个 _check_rate_limit
+    纯函数 + 3 个模块常量 sanity check）；pytest tests/ -v 报
+    129 passed in 0.30s。
+  - IMATOOLS_VERSION 由 1.2.4 升到 1.2.5。
+
+【脚本 v1.15.0 + bat 工具链无版本变动】IMA 推送加 timeout + 试抽 bat 公共库未遂（2026-07-17）
+  - ① chat2knowledge.user.js 的 pushToIma 加 timeout: 8000（8s）+ ontimeout 提示。
+    原本没 timeout——如果 watcher 进程挂或端口被占，请求一直挂着、UI 无反馈。
+    8s 够本地 HTTP 桥正常处理（一般 < 1s），又不至于让用户久等。新增常量
+    IMA_PUSH_TIMEOUT_MS = 8000。
+  - ② 试抽 tools/_lib_common.bat 公共库（消除 3 个 bat 重复的 ini 解析头），
+    写了 _lib_common.bat 提供 :init / :read_py / :resolve_py 子程序，把 3 个
+    bat 改成 call "%SCRIPT_DIR%_lib_common.bat" :label——实测发现
+    `call file.bat :label` 语法 cmd 不支持（变量不传回、label 找不到），
+    子程序的 set 设的变量无法在父作用域读取。回滚 3 个 bat、删除
+    _lib_common.bat，3 个 bat 保持原 v1.1.8 形态重复 30 行 ini 解析头。
+    结论：cmd 原生不支持子文件公共库，要消除重复得用「发布时拼接」或
+    「PowerShell wrapper」等 hack——得不偿失。3 个 bat 工具链版本号不动
+    （仍 v1.1.8），重复继续保留。
+  - chat2knowledge.user.js @version 由 1.14.9 升到 1.15.0。
+
+【Python 工具 v1.2.4 + 脚本 v1.14.9】顺手修 extractDescription 两个 v1.8.0 bug（2026-07-17）
+  - v1.2.3 写测试时发现 v1.8.0 引入的两个 bug，按用户决定顺手修。
+  - Bug ① 标题行没跳过：原实现 .map strip 标题前缀再 filter，filter 检查
+    的是 strip 后的 l，所以标题文字也作为摘要一部分（与「首个非标题段落」
+    注释意图不一致）。
+  - Bug ② 代码围栏内部行没跳过：原逻辑只跳以 ``` 开头的行，但 ``` 围栏
+    内部的代码行（print(1) 之类）被当摘要加进去。
+  - 修法：链首加 .filter(!/^#{1,6}\s/.test(l)) 用原始行跳标题行（必须在
+    strip map 之前）+ 改 for 循环 + inFence 状态机跟踪围栏内/外，围栏内
+    所有行都跳过。
+  - 修后：# 我的标题\n\n```python\nprint(1)\n```\n\n这是摘要内容。
+    → description = "这是摘要内容。"（修复前会是 "我的标题 print(1) 这是摘要内容。"）
+  - TestExtractDescription 同步更新（13 个 case），Python 复刻版行为与修好
+    后的真 JS 完全一致。pytest tests/ -v 报 117 passed in 0.25s。
+  - IMATOOLS_VERSION 由 1.2.3 升到 1.2.4；JS 脚本头部 @version 由 1.14.8
+    升到 1.14.9。
+
+【Python 工具 v1.2.3】新增 tests/ 回归测试套件（2026-07-17）
+  - 新增 tests/ 目录：113 个 pytest case 覆盖 Python 端 + JS 端纯函数层。
+    - tests/test_ima_upload.py（21 个 case）：测 Python 纯函数 derive_title
+      （11）/ load_local_config（10）。
+    - tests/test_js_pure_equivalents.py（92 个 case）：测 chat2knowledge.user.js
+      里 DOM 无关字符串纯函数的 Python 1:1 复刻版（fenceLen / looksLikeMarkdownSource
+      / balanceFences / unwrapWrappingFence / unwrapSourceFences / cleanCitations
+      / normalizeMd / extractH1 / sanitizeTitle / yamlQuote / extractDescription
+      / buildFileName），每个函数 5~16 个边界 case。
+    - tests/conftest.py：把 tools/ 加进 sys.path，让测试能 import ima_upload。
+    - tests/README.md：设计取舍说明（为什么不测真 JS、为什么不测 blockToMd /
+      站点选择器层）+ 跑测命令 + 维护约定。
+  - 不测什么（明确写在 tests/README.md 避免「回归测试 PASS ≠ 框架实际工作」）：
+    - blockToMd / inlineToMd（深度递归 DOM，复刻太重 + drift 风险大，价值低）
+    - 站点选择器层（ADAPTERS.xxx.assistantSel 等，测了也糊弄，CHANGELOG v1.14.3
+      已经写过「误信 Edge 保存的 HTML 快照」教训）
+    - 涉及凭证 / 网络的 side-effect 函数（mock 成本高、价值低）
+  - 改 JS 字符串纯函数时务必同步更新 Python 复刻版（_js_xxx()）——这正是这套
+    测试的核心价值：强迫 reviewer 显式确认「JS 和 Python 行为一致」。
+  - 测试发现 1 个 v1.8.0 引入的真 bug：extractDescription 注释说「首个非标题
+    段落」但实现是 strip 标题前缀后保留标题文字作为摘要（# 我的标题 → description
+    含「我的标题」）。本测试套件只反映并标记问题（TestExtractDescription 类注释 +
+    复刻函数 docstring），不动原 JS；是否修由用户决定（修法：在 filter 里加
+    !/^#{1,6}\s/.test(l)，检查 strip 前的原始行）。
+  - 验证：本机 miniconda (Python 3.13) 跑 `pytest tests/ -v` 报
+    `113 passed in 0.24s`（explicitly verify 测试 count）。`--version` 同步
+    输出 1.2.3。
+  - IMATOOLS_VERSION 由 1.2.2 升到 1.2.3。
+
+【Python 工具 v1.2.2】新增 requirements.txt + 依赖描述统一（2026-07-17）
+  - 新增 tools/requirements.txt：cos-python-sdk-v5 / requests / watchdog 三个依赖
+    带最低版本下限（>=1.0.0 / >=2.20.0 / >=2.0.0），不 pin 小版本。一次
+    `pip install -r tools/requirements.txt` 即可。注意：cos-python-sdk-v5
+    名字里虽然带 "v5" 但 PyPI 版本号是 1.9.x（v5 SDK 一直沿用 1.x），别被名字
+    骗写出 >=5.0.0 导致 pip 报「No matching distribution found」。
+  - 所有提到「pip install cos-python-sdk-v5 ...」的地方（README 一次性准备第 3 步、
+    ima_upload.py / ima_watcher.py 头部 docstring、3 个 bat 的缺依赖错误提示、
+    本 notes「Python（PY 即 Python 可执行文件）」小节）全部改为指向 requirements.txt，
+    避免文档与脚本 drift。
+  - 改完顺手做了一次全仓库 grep 验证：除「Python 工具 v1.2.x（依赖描述统一）」这条
+    新版本记录本身和历史 CHANGELOG 里的「依赖 cos-python-sdk-v5 requests」外，
+    0 处仍出现裸 `pip install` 列举依赖的命令。
+  - 字节审计（仅改动 echo 文本）：无 BOM / CRLF / 0 裸 LF / 0 非 ASCII / 0 `!` /
+    0 裸 `&` / 0 字面圆括号 / 括号平衡；3 个 bat 同步检查。
+  - 验证：本机 miniconda (Python 3.13) 跑 `pip install -r tools/requirements.txt` 一次
+    通过；`ima_upload.py --version` 输出 `ima_upload 1.2.2`、`ima_watcher.py --version`
+    输出 `ima_watcher 1.2.2`（版本号统一从 ima_upload.IMATOOLS_VERSION 读取）。
+  - IMATOOLS_VERSION 由 1.2.1 升到 1.2.2。
+
+【Python 工具 v1.2.1】新增两个 watcher 启动器 bat（2026-07-16）
+  - 新增 ima_watcher_bridge.bat（双击起 HTTP 桥 --serve）与 ima_watcher_monitor.bat
+    （双击起目录监视，可拖文件夹指定监视目录）。
+  - 两者复用 ima_upload.bat 的 ini→PY 安全提取头（only 取 PY，解决 Miniconda 未注册
+    PATH）、where python/py 兜底、--version 健康自检；守 bat 铁律（CRLF / 纯 ASCII /
+    无 REM/:: / 无裸 & / 整体括号平衡）；无 OK/FAIL 横幅。结尾新增 pause：常驻进程
+    退出（含 python 报错）后窗口停留，避免再次静默闪退、便于看真实报错。
+  - 闪退修复（2026-07-16 晚）：初版第 23 行 echo 写回了 `(e.g. Miniconda python).`
+    半角括号，且处在 `if not defined PY ( if errorlevel 1 ( ... echo ... ) )` 嵌套
+    块内——cmd 在解析阶段就把 echo 文本里的 `)` 当「块结束」，括号失配 → 整段脚本
+    语法错误、双击即闪退（与 ima_upload.bat v1.1.3/v1.1.7 同源）。修复：echo 改为无
+    括号的 `, e.g. use your Miniconda python.`（与已修好的 ima_upload.bat 一致）。
+  - 审计教训：仅看「整体括号 N/N 平衡」会漏掉 echo 行内的裸括号——bat 闪退排查必须
+    **逐行扫描 echo 文本是否含半角圆括号**（块内尤其危险）。已用 Python 字节审计脚本
+    确认修复后 echo 行 0 括号、其余指标（BOM/CRLF/ASCII/&/!/REM）全干净。
+  - monitor bat 对拖放路径去尾部反斜杠（if "%ARG:~-1%"=="\" set "ARG=%ARG:~0,-1%"），
+    避免 "C:\foo\" 末尾反斜杠转义引号导致参数断裂。KB_ID/SRC 仍由 ima_watcher.py 读 ini。
+  - IMATOOLS_VERSION 由 1.2.0 升到 1.2.1。
+
+【Python 工具 v1.2.0】目录监视 on_moved 修复 + 版本号（2026-07-16）
+  - 修复「目录监视模式无反应」：浏览器下载为原子保存（先写 .md.part/.crdownload
+    临时文件，写完改名 .md），最终 .md 的出现是 on_moved 事件；原 Handler 只监听
+    on_created，故漏掉改名后的 .md、表现成「文件在 Downloads 里、watcher 却毫无反应」。
+    现 Handler 同时监听 on_created 与 on_moved，并跳过 .part/.crdownload/.tmp 半成品，
+    新增 [WATCH] 检测日志便于确认捕获。
+  - 新增 IMATOOLS_VERSION="1.2.0" 常量（定义在 ima_upload.py，watcher 经
+    ima_upload.IMATOOLS_VERSION 共用），两脚本均加 --version 可查。
+  - 验证：miniconda 环境实测——模拟 .part→改名.md 触发 on_moved 被正确 ingest，
+    直接创建 .md 触发 on_created 也被 ingest，.part 不被误 ingest；--version 正常输出 1.2.0。
+
+【Python 程序】节流逻辑统一收口到 ima_upload.py（2026-07-16，已并入 v1.2.0）
+  - 把串行+节流从 ima_watcher.import_to_kb 下沉到 ima_upload.upload_file_to_kb：
+    原函数体改名 _upload_file_to_kb_raw（纯上传），新增公开 upload_file_to_kb
+    包裹「进程内 threading.Lock + _MIN_INTERVAL(默认1.5s) 最小间隔」。
+  - 现在所有上传入口共用同一条管线：ima_upload.py CLI、ima_upload.bat
+    （循环逐个起独立进程）、ima_watcher.py 的目录监视 / HTTP 桥——节流单一来源、
+    DRY。ima_watcher.import_to_kb 改为直接委托 ima_upload.upload_file_to_kb，
+    自身不再重复实现锁/间隔；watcher 的 --min-interval 仅透传设置
+    ima_upload._MIN_INTERVAL。
+  - ima_upload.py 新增 --min-interval 参数（默认1.5，可0关闭），与 watcher 对齐。
+  - 验证：桩 import 连调 upload_file_to_kb 3 次间隔稳定~1.6s；watcher.import_to_kb
+    第4次相对第3次间隔~1.6s，证明委托到同一条节流管线；watcher 已无自有节流全局变量。
+  - 说明（进程内节流边界）：对 ima_watcher 这种常驻单进程能完美串行化并发
+    on_created 线程；对 ima_upload.bat 多次调用（每次独立进程）各锁互不影响，但
+    bat 本身是 for 串行循环、天然不并发，故无需跨进程协调。
+
+【Python 程序】ima_watcher.py 上传改为串行 + 节流（2026-07-16，已被上述统一收口取代）
+  - 新增全局串行 + 节流上传：所有上传入口（目录监视 on_created、HTTP 桥 ingest）
+    统一走 import_to_kb()，内部用 threading.Lock 串行化，并在两次上传之间强制
+    最小间隔（默认 1.5s），以平滑请求节奏、降低「目录监视模式」下多 .md 同时落盘
+    时瞬时并发触发 IMA 风控/限流的风险。
+  - 新增 --min-interval 参数（默认 1.5，单位秒，可为 0 关闭）覆盖间隔时长。
+  - 调试可见性：每次被节流时会打印 [THROTTLE] 日志（距上次上传 Xs，歇 Ys 再传…），
+    便于确认节流生效。已用桩 import 连续调用 3 次实测，间隔稳定 ~1.6s（1.5s 间隔 + 模拟上传耗时）。
+  - 文档同步：README「目录监视模式」与「也可改用目录监视」两处均补「串行+节流，
+    --min-interval 可调」说明。
+
+【Python 程序】ima_upload.py / ima_watcher.py 默认读 ima_config.ini（2026-07-16）
+  - 新增共享配置读取函数 load_local_config()（定义在 ima_upload.py，watcher 通过
+    ima_upload.load_local_config() 复用）：读取与 bat 同目录、同格式的 ima_config.ini，
+    解析规则与 bat 完全一致（跳过 ;/# 注释与空行、第一个 = 切分、key 大写、去首尾空格）。
+  - ima_upload.py：--kb-id 改为可选，省略时取 ima_config.ini 的 KB_ID；两者皆无则明确报错
+    （不再 required，可直接 `python ima_upload.py --file xxx.md` 以 ini 为准）。
+  - ima_watcher.py：--kb-id 可选（取 INI 的 KB_ID）；位置参数 watch_dir 可选，省略时取
+    INI 的 SRC（仍无则回退 %USERPROFILE%\Downloads；Mac / Linux 等价 ~/Downloads）。即
+    `python ima_watcher.py` 也能直接跑（以 ini 为准）。
+  - 优先级：手动传参 > ima_config.ini > 内置默认（%USERPROFILE%\Downloads；Mac / Linux 等价 ~/Downloads）。
+    PY 键仅 bat 用，Python 程序忽略。
+  - 文档同步：README 两处启动命令、接入说明均补「--kb-id 可省略，自动读 ima_config.ini」；
+    ima_config_sample.ini 与 ima_config.ini 的 KB_ID / SRC 注释补一句「也被 Python 程序默认读取」。
+
+v1.1.8（2026-07-16）
+  - 删除整套文件日志逻辑：不再生成 ima_upload.log，也不再使用临时文件 _upload_out.tmp。
+    理由：Python 真实输出、上传 OK/FAIL 横幅、汇总均已实时显示在屏幕上，磁盘日志多余。
+    改动：移除 LOG / TMPFILE 变量与所有 `>> "%LOG%"` 写文件行；Python 改为直接输出到
+    屏幕并紧接 `set "RC=%errorlevel%"` 捕获退出码（去掉先重定向到临时文件再 type 的两步）。
+    保留 chcp 65001 与 PYTHONIOENCODING=utf-8（保证中文在屏幕上不乱码）。
+    字节审计：无 BOM / CRLF、0 裸 LF / 0 非 ASCII / 0 `!` / 0 裸 `&` / 括号 24/24 平衡，
+    且不再有任何 echo 行文本含字面圆括号（v1.1.7 已清）。
+  - 文档同步：本 notes 的「成功 / 失败提示」小节改为「直接上屏、不再写日志」；两处故障
+    自查删掉「打开 ima_upload.log」的指引，改为「从 cmd 手动运行 bat 看具体报错」。
+
+v1.1.7（2026-07-16）
+  - 修复「上传成功、收尾时报 : was unexpected at this time. 并闪退」：根因是
+    :upload 子程序里 `if %RC%==0 ( ... ) else ( ... )` 收尾块在**执行前**就被 cmd
+    一次性解析；else 分支 echo 文本 `… (exit=%RC%): …` 里的字面圆括号被 cmd 当成
+    新代码块开/闭，其后 `: %ARG%` 变成非预期的 `:` → `: was unexpected`。此块无论
+    成败、是否真的执行到 else 都会崩（解析阶段即报错）。修复：去掉该 echo 的圆括号，
+    改为 `echo [FAIL] upload failed, exit code %RC%: %ARG%`，并全文扫描确认再无 echo
+    行文本含字面圆括号。字节审计：无 BOM / 135 CRLF、0 裸 LF / 0 非 ASCII / 0 `!` /
+    0 裸 `&` / 括号 24/24 平衡。
+  - 教训：bat 里「(...) 块内的 echo 文本出现半角圆括号」会令整个块解析失败（哪怕那
+    一行从不执行）；块内 echo 一律用中文全角括号「（）」或不含半角括号的写法。
+
+v1.1.6（2026-07-16）
+  - 新增「上传成功 / 失败的可视化提示」：之前 Python 输出全进日志、屏幕只打
+    `[upload] 路径` 一行，用户看不到结果。现把 Python 真实输出（成功 [OK] 已导入
+    知识库 / 失败 [ERR] ...）同时显示在屏幕并写日志；每个文件追加 `[OK] uploaded:`
+    或 `[FAIL] upload failed, exit code N:` 横幅；结束打 `[summary] uploaded OK : N` /
+    `[summary] failed : M` 汇总。设 PYTHONIOENCODING=utf-8 + 顶部 chcp 65001 防中文
+    乱码；临时输出走 _upload_out.tmp，展示并记日志后于结束前删除。实现：python 输出
+    重定向到临时文件 `> "%TMPFILE%" 2>&1`，随即 `set "RC=%errorlevel%"` 捕获退出码，
+    再 `type` 临时文件到日志与屏幕，按 RC 打横幅并 `set /a OK_CNT/FAIL_CNT+=1`。
+
+v1.1.5（2026-07-16）
+  - 修复「ima_config.ini 已配好 KB_ID 却报 KB_ID not set」：v1.1.4 的解析只给 value
+    去空格，没给 key 去空格。当 ima_config.ini 写成 `KB_ID = xxx`（等号前带空格）时，
+    for /f 切出的 key 是 "KB_ID "（带尾随空格），与 "KB_ID" 比不相等 → 永远设不上。
+    修复：在外层按 = 切分后，再套一层 for /f "tokens=1 delims= " 给 key 去首尾空格
+    （for /f 自带去空白），value 仍用内层 for /f "eol= tokens=*" 去前导空格。
+    现已能正确读取 `KB_ID = xxx`、`KB_ID=xxx`、`SRC = 路径`、`PY = 路径`
+    （含空格、含结尾 = 的 base64 型 KB_ID 均正常）。用脚本以真实 ima_config.ini 模拟
+    for /f 切分验证：KB_ID / PY 均正确提取、SRC 留空（拖放模式不需要）。
+  - 教训：bat 里 key=value 解析，等号两侧的空格都要处理；只 trim 一侧会漏掉另一侧。
+
+v1.1.4（2026-07-16）
+  - 修复「用户从 cmd 直跑 bat 报 & was unexpected at this time.」：真正的致命点
+    是 :trim 子程序里的两行 `if ... set ... & goto trim_loop` —— 该子程序从
+    for /f (...) do (...) 配置解析块内被 call 出来，cmd 在「块内 call 子程序 +
+    子程序内含 & 复合命令」这种嵌套下解析错乱，报 & 错误并中止。这是继 v1.1.3
+    （echo 裸括号）之后、压在下面的第二层解析错误，所以 v1.1.3 修完仍崩。
+  - 修复方式：彻底删除 :trim 子程序与其 call，配置解析改为「外层 for /f 按 =
+    切分 key/value，内层 for /f "eol= tokens=*" 给 value 去首尾空格」（for /f
+    自带去空白），并去掉 EnableDelayedExpansion（已无 !var! 需求）。现全文零 `!`、
+    零裸 `&`（仅剩 2>&1 重定向）、括号 20/20 平衡、CRLF、纯 ASCII、无 BOM。
+  - 教训：bat 里「从 (...) 块内 call 一个含 & 的子程序」是经典雷区；配置/文本
+    处理优先用纯 for /f 嵌套而非 call 子程序 + &。
+
+v1.1.3（2026-07-16）
+  - 修复「拖放 bat 依然闪退」：真正的根因是 echo 提示行里有两个未转义的括号
+    —— 第 40 行 "(e.g. Miniconda python)" 与第 78 行 "file(s)/folder"，这两行都
+    处在 if (...) ( ... ) 代码块内，裸括号被 cmd 当成代码块的开 / 闭，导致括号
+    不匹配 → 语法错误 → 整段脚本立即中止 → 窗口一闪即关。这其实从 v1.0.0 起就
+    存在；v1.1.1（去中文）、v1.1.2（改 CRLF）都没碰到这一处，所以仍闪退。
+  - 已把两处 echo 改写为不含裸括号的英文，并用脚本逐行扫描确认：全文仅剩 if/for
+    代码块内的合法括号，echo 行零括号、括号总数 18/18 平衡；同时确认无 BOM、CRLF、
+    纯 ASCII。现已消除所有经典 .bat 崩溃诱因。
+  - 同步修正：本 notes 的「常见故障」小节与 README 更新记录，更正此前对根因的误判
+    （此前把闪退归因于中文 / LF，它们只是预防措施，并非本次致命点）。
+
+v1.1.2（2026-07-16）
+  - 修复「拖放 bat 仍闪退」：根因是 .bat 文件为 LF（Unix 换行）而非 CRLF
+    （Windows 换行）。cmd.exe 要求 CRLF，LF 导致多行块/标签解析失败、整段
+    脚本语法错误而立即中止 → 窗口一闪即关。已用 CRLF 重写文件（126 行均为
+    CRLF、0 个裸 LF），并加 ima_upload.log 逐步日志（含 python 的 stdout/stderr
+    与每个文件的上传退出码），便于后续定位。v1.1.1 的中文去化也保留。
+  - 提示：若日后用编辑器改动本 bat，务必保存为 CRLF，否则会复现闪退。
+
+v1.1.1（2026-07-16）
+  - 修复「拖放 bat 闪退」：彻底移除 .bat 内所有中文字符（echo 与注释），
+    改为纯英文 ASCII；中文用法集中保留在本 notes.txt。根因是中文 Windows
+    以 GBK 解析 UTF-8 bat，中文字节被误读为命令元字符导致脚本中止。
+  - 拖放入参由 for %%a in (%*) 改为 shift 循环逐个处理，路径含空格 / 特殊
+    字符（如括号、&）时不再被拆碎，单文件与多文件拖放均稳定。
+  - 其余行为（双击=SRC 目录、拖放=选中项、仅一层 .md、PY 校验、pause）不变。
+
+v1.1.0（2026-07-16）
+  - 配置外置到 ima_config.ini：KB_ID / SRC / PY 三项不再写在 bat 头部，改为从
+    同目录 ima_config.ini 读取（缺失则提示复制 ima_config_sample.ini 模板）。
+  - 新增 ima_config_sample.ini 模板；ima_config.ini 已加入仓库 .gitignore，不泄露
+    个人知识库 ID / 本地路径。
+  - PY 即 Python 可执行文件：默认自动探测 python → py；Miniconda 未注册为
+    默认 python 时，在 ima_config.ini 填 PY 的完整路径即可（如 miniconda3\python.exe）。
+  - 填完 PY 后做一次可用性校验（能跑通 --help 才算数），跑不通明确提示。
+  - 其余行为（双击=SRC 目录、拖放=选中项、仅一层 .md、参数规范化、pause）不变。
+
+v1.0.0（2026-07-16）
+  - 新增 ima_upload.bat：头部可配 KB_ID / SRC；双击导入 SRC 全部 .md，
+    拖放文件或文件夹则导入其中的 .md（非 .md 跳过，文件夹仅一层）。
+  - 自动探测 python / py；中文报错提示；结束 pause 便于查看结果。
+  - 拖放参数规范化：去外层引号、去末尾反斜杠；路径含空格可正常处理。

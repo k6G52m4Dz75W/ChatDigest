@@ -1,0 +1,18 @@
+# ChatDigest / 聊摘 · IMA 导入工具链依赖
+# 一次性安装：pip install -r tools/requirements.txt
+#
+# cos-python-sdk-v5 : 腾讯云 COS 官方 SDK，仅 ima_upload.upload_to_cos 真正上传时用到
+# requests          : IMA OpenAPI 三步调用（create_media / add_knowledge /
+#                     get_addable_knowledge_base_list）
+# watchdog          : 仅目录监视模式（ima_watcher.py 不带 --serve）必需；
+#                     HTTP 桥模式 --serve 不需要，未装时该模式会报清晰缺包错
+#
+# 版本号：仅写最低兼容下限（>=），不 pin 小版本；pin 反而会在腾讯云 SDK 升小版本时
+# 报冲突。已在本机 miniconda (Python 3.13) 验证可用。
+#
+# 注：cos-python-sdk-v5 虽然名字带 "v5"，但 PyPI 上最高版本是 1.9.44（v5 SDK 一直沿用 1.x 版本号），
+# 别被名字骗了。
+
+cos-python-sdk-v5>=1.0.0
+requests>=2.20.0
+watchdog>=2.0.0

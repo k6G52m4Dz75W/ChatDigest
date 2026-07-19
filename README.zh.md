@@ -127,7 +127,8 @@ const IMA_ENDPOINT    = 'http://127.0.0.1:8765/ingest'; // 本地桥地址（与
    echo "你的 API Key"    > ~/.config/ima/IMA_API_KEY
    ```
    注：`%USERPROFILE%`（Windows）= `~` / `$HOME`（Mac / Linux），三者等价都指向当前用户主目录。
-3. 安装依赖（Windows 同样适用，在 CMD / PowerShell 里运行同样的命令即可）：`pip install -r tools/requirements.txt`
+3. 在你打算用的那个 Python 里装依赖（Windows 同样适用，在 CMD / PowerShell 里运行同样的命令即可）：`pip install -r tools/requirements.txt`。
+   > ⚠️ **Miniconda / 虚拟环境用户**：bat 无法自动识别你的环境。Miniconda 默认不把 `python.exe` 加到 PATH，Windows 上 `where python` 优先命中的是 Microsoft Store 壳子或其他不相干的 python。**必须在 `tools/ima_config.ini` 里把 `PY =` 显式指向你环境的 `python.exe`**（例如 `C:\Users\<你>\miniconda3\envs\myenv\python.exe`），bat 会以这个硬编码路径为最高优先级。不知道 env 路径可以跑 `conda env list` 看。漏配这一项是桥接报 `No module named 'qcloud_cos'` HTTP 500 的最常见原因——尤其在重装 Miniconda 或者把依赖装到 base 之外的 env 之后。
 4. 在 ima.qq.com 知识库设置里复制你的**知识库 ID**（形如 base64 长串）。需是当前账号**可写入**的库（个人库 / 有写权限的共享库）；上传时会自动校验，填错或无权限会立即报错并列出可选项。
 
 ### 1. 脚本侧开关（默认开启，无需改源码）

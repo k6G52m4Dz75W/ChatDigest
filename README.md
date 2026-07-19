@@ -127,7 +127,8 @@ const IMA_ENDPOINT    = 'http://127.0.0.1:8765/ingest'; // Local bridge address 
    echo "your API Key"    > ~/.config/ima/IMA_API_KEY
    ```
    Note: `%USERPROFILE%` (Windows) = `~` / `$HOME` (Mac / Linux), all three point to the current user's home directory.
-3. Install dependencies (Windows works the same way, run the same commands in CMD / PowerShell): `pip install -r tools/requirements.txt`
+3. Install dependencies in the Python you intend to use (Windows works the same way, run the same commands in CMD / PowerShell): `pip install -r tools/requirements.txt`.
+   > ⚠️ **Miniconda / venv users**: the bat cannot auto-detect your env. Miniconda doesn't add `python.exe` to PATH, and `where python` on Windows will find the Microsoft Store stub or other unrelated Pythons first. **You must set `PY =` in `tools/ima_config.ini` to your env's `python.exe`** (e.g. `C:\Users\<you>\miniconda3\envs\myenv\python.exe`); the bat uses this hardcoded path with absolute priority. Run `conda env list` to find the env path. Skipping this is the #1 cause of the bridge returning HTTP 500 with `No module named 'qcloud_cos'` after a fresh Miniconda install or a `pip install` against the wrong env.
 4. Copy your **knowledge base ID** from the IMA knowledge base settings (looks like a long base64 string). Must be a library the current account can **write to** (personal library / shared library with write access); upload auto-validates, wrong or unauthorized will error immediately and list available options.
 
 ### 1. Script-side toggle (enabled by default, no source change)

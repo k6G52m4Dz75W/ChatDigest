@@ -915,10 +915,11 @@
 
     /* 从抓取内容提取一段纯文本摘要，用于 YAML frontmatter 的 description。
        策略：跳过 H1 行（标题已由 frontmatter title 承载，不重复），取之后
-       的前 N 字符（默认 100），途中 strip 掉所有 markdown 行内/行首装饰
-       （标题标记 / 列表 / 引用 / 表格行 / 围栏内代码 / bold / italic /
-       inline code / link / image），只留纯文本。
-       不特意区分 H2/H3——用户视角下"开头那段"就是描述，不需要先找 H2
+       的前 N 字符（默认 100）。
+       清洗规则：保留列表 bullet / 数字（结构信息，不只是格式装饰），
+       strip 其他行内/行首装饰（标题标记 / 引用 / 表格行 / 围栏内代码 /
+       bold / inline code / link / image），只留纯文本。
+       不特意区分 H2/H3——用户视角下"开头那段"就是描述，不预先找 H2
        当 prefix；万一没 H2 也不影响。 */
     function extractDescription(md, maxLen) {
         maxLen = maxLen || 100;
@@ -940,10 +941,9 @@
                 if (buf.length) buf.push(' ');  // 空行 → 段落分隔
                 continue;
             }
+            // 保留列表 bullet/number（结构信息），strip 其他行首装饰
             const cleaned = raw
-                .replace(/^#{1,6}\s+/, '')     // 标题标记
-                .replace(/^[-*+]\s+/, '')      // 无序列表
-                .replace(/^\d+[.)]\s+/, '')    // 有序列表
+                .replace(/^#{1,6}\s+/, '')     // 标题标记（H2/H3/...）
                 .replace(/^>\s?/, '')          // 引用
                 .replace(/^\|.*\|$/, '')       // 表格行
                 .trim();
@@ -951,10 +951,10 @@
             buf.push(cleaned);
         }
         const text = buf.join(' ')
-            .replace(/\*+/g, '')                                    // bold / italic
-            .replace(/`([^`]+)`/g, '$1')                            // inline code
-            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')                // link
-            .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')               // image
+            .replace(/\*\*([^*]+)\*\*/g, '$1')             // bold
+            .replace(/`([^`]+)`/g, '$1')                    // inline code
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')        // link
+            .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')       // image
             .replace(/\s+/g, ' ')
             .trim();
         if (!text) return '';

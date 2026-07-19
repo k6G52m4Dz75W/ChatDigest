@@ -1,0 +1,119 @@
+name: Release
+
+# 触发方式 (二选一, 都 OK):
+#   1. tag push: `git tag v1.16.0 && git push origin v1.16.0` -> 自动 trigger
+#   2. workflow_dispatch: Actions tab -> Run workflow -> 填 tag -> 手动 trigger
+#   (手动 trigger 备用: tag push 万一没触发 / 想 re-create release / 想手动选旧 tag)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.16.0). Required for manual trigger.'
+        required: true
+        type: string
+
+# 显式声明最小权限, 避免 GITHUB_TOKEN 拿到过多 scope
+permissions:
+  contents: write   # create release + write tag
+
+jobs:
+  release:
+    name: Create GitHub Release from CHANGELOG
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 拿全 git log, 软引用 commit message 才不会断
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version (tag push vs manual)
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          # tag push: github.ref_name = "v1.16.0" (已含 v 前缀)
+          # workflow_dispatch: github.ref_name = "main" (default branch, 不是 tag!)
+          #   -> 必须用 inputs.tag, 不能用 ref_name
+          if [ "$EVENT_NAME" = "push" ]; then
+            VERSION="$REF_NAME"
+          else
+            VERSION="$INPUT_TAG"
+          fi
+
+          # sanity check: version 必须形如 v1.2.3 (可选带 -prerelease 后缀)
+          # 防: 误传 / 含 '/' (GITHUB_REF prefix 不匹配会输出 "refs/heads/main" 之类)
+          if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$'; then
+            echo "ERROR: invalid version '$VERSION' (must match ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$)"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION (event=$EVENT_NAME)"
+
+      - name: Extract CHANGELOG section for ${{ steps.version.outputs.version }}
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # CHANGELOG.md 实际格式: - **vX.Y.Z：title**\n...content...\n- **vX+1 或 vX-1...**  或文件末尾
+          # (CHANGELOG 是**倒序**, v1.16.0 后面是 v1.15.16, 所以 lookahead 用任意 v\d+\.\d+\.\d+ 即可)
+          #
+          # 用 Python heredoc 替代 awk/sed:
+          #   避开 bash 单引号里 awk pattern 转义陷阱 (agent memory 教训)
+          #   跨平台 runner 都有 Python3 (ubuntu-latest / macos / windows 都默认装)
+          python3 << 'PYEOF'
+          import os, re, sys
+
+          version = os.environ['VERSION']  # e.g. "v1.16.0"
+          anchor  = version                 # CHANGELOG 用 "v1.16.0" 形式作 entry 标题
+          path_in  = 'CHANGELOG.md'
+          path_out = 'release_body.md'
+
+          with open(path_in, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          # 匹配 "- **v1.16.0：..." 或 "- **v1.16.0:..." (中英文冒号都接受)
+          # 到下一个 "- **vX.Y.Z" (任意版本号, 倒序下一个) 或文件末尾为止
+          pattern = rf'^- \*\*{re.escape(anchor)}[：:].*?(?=^- \*\*v\d+\.\d+\.\d+|\Z)'
+          m = re.search(pattern, content, re.MULTILINE | re.DOTALL)
+          if not m:
+              print(f"ERROR: no CHANGELOG section found for {anchor}", file=sys.stderr)
+              print(f"  expected anchor: - **{anchor}： ...", file=sys.stderr)
+              sys.exit(1)
+
+          section = m.group(0).rstrip()
+
+          # sanity check: softprops/action-gh-release 在 body_path 文件空/不存在时
+          # 会**静默 fallback**到 commit message (agent memory 教训)
+          # 必须在写文件前 fail, 不能相信 silent fallback
+          # 注意: CHANGELOG entry 经常是**单行超长**(无内部换行), splitlines() 只切出 1 个元素
+          # 所以按**字符数**判定 (而不是行数): < 50 chars 视为匹配错/匹配到垃圾
+          if len(section) < 50:
+              print(f"ERROR: CHANGELOG section too short ({len(section)} chars), refusing to write empty body", file=sys.stderr)
+              sys.exit(1)
+
+          with open(path_out, 'w', encoding='utf-8') as f:
+              f.write(section + '\n')
+
+          print(f"OK: extracted {len(section)} chars for {anchor} -> {path_out}")
+          PYEOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          body_path: release_body.md
+          # fail_on_unmatched_files: body_path 找不到文件时 fail (默认 true 但显式声明更稳)
+          # fail_on_unset_body: 同样保险
+          fail_on_unmatched_files: true
+          fail_on_unset_body: true
+          # 不让 GitHub 自动生成 notes 混进 release body
+          generate_release_notes: false

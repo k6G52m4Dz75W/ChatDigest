@@ -131,6 +131,19 @@ def ingest_content(content: str, filename: str, watch_dir: str, kb_id: str) -> b
 
 
 def run_watch_mode(watch_dir: str, kb_id: str):
+    # 防御性检查：monitor 模式是「目录监视」，传入路径必须是目录。
+    # 用户从 bat 拖文件上来时最容易踩这个坑——bat 把文件路径原样传下来，
+    # os.makedirs(watch_dir, ...) 会以「该路径已存在且是文件」为由抛
+    # FileExistsError [WinError 183]，原始 traceback 让人误以为是脚本 bug。
+    if not os.path.isdir(watch_dir):
+        sys.stderr.write(
+            f"[ERR] monitor 模式需要一个目录路径，但你传入的路径不是目录：\n"
+            f"     {watch_dir}\n"
+            f"     - 拖单个 .md 文件上传：改用 ima_upload.bat\n"
+            f"     - 拖目录做持续监视：确认路径是文件夹而不是文件\n"
+            f"     - 不带参数运行：自动读 ima_config.ini 的 SRC\n"
+        )
+        sys.exit(2)
     # 目录监视依赖 watchdog；HTTP 桥模式（--serve）不依赖它，所以 bridge 能跑
     # 而 monitor 崩，最常见的根因就是「跑 monitor 的那个 Python 没装 watchdog」。
     # 这里把 ImportError 转成清晰、可执行的报错，而不是抛一串看不懂的 traceback。

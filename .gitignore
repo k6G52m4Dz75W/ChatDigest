@@ -181,3 +181,10 @@ cython_debug/
 .cursorindexingignore
 
 tools/ima_config.ini
+
+# 本地调试文件 (含用户真实对话隐私) — kimi.html 等 HTML 调试用 snapshot
+# 按 agent memory "本地调试目录不进文档 (防隐私泄露)"
+kimi.html
+_*.html
+_*.png
+_*.jpg

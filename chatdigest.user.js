@@ -820,7 +820,7 @@
                 parts.push(`# 🤖 ${tag}AI 回复\n\n${it.md}`);
             }
         }
-        return parts.join('\n\n---\n\n');
+        return parts.join('\n\n');
     }
 
     function getChatTitle() {

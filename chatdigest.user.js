@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatDigest / 聊摘 — AI 对话一键整理为 Markdown 知识库
 // @namespace    https://github.com/chatdigest
-// @version      1.16.0
+// @version      1.17.0
 // @description  ChatDigest / 聊摘 — 一键把 AI 对话整理成 Markdown 知识库文章。完全本地 / 无订阅 / 无需 API key / 多站点 (DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝) / 隐私优先 / 玻璃拟态 UI。可选推送到 IMA、Obsidian 等任意 Markdown 友好工具。locale-aware 文件名 (zh = 聊摘, 其他 = ChatDigest)。变更历史见 CHANGELOG.md。
 // @author       ChatDigest Contributors
 // @match        *://chat.deepseek.com/*
@@ -86,10 +86,25 @@
         },
         kimi: {
             name: 'Kimi',
-            assistantSel: '.kimi-message-content, [data-role="assistant"]',
-            userSel: '[data-role="user"]',
+            // v1.17.0 修正: v1.16.0 写的 `.kimi-message-content, [data-role="assistant"]`
+            // 实际 Kimi 页面**根本不存在**这两个 class/attr (来自 stub 假设) —— 见 v1.16.0 entry
+            // "0 测试覆盖 / 手动验证清单: 打开 www.kimi.com F12 看到 ✅ ChatDigest started · Kimi"
+            // 实际那时注入成功但 getAssistantMessages() 返回空, 一键导出后续全失败.
+            // 真实 DOM (kimi.html 实测):
+            //   user message:     <div class="chat-content-item chat-content-item-user">
+            //                     └ <div class="segment segment-user">
+            //                       └ <div class="user-content">用户文本
+            //   AI reply:         <div class="chat-content-item chat-content-item-assistant">
+            //                     └ <div class="segment segment-assistant">
+            //                       └ <div class="markdown-container"><div class="markdown">
+            //                         └ <div class="paragraph"> / <h2> / <ul> / <table> 等标准 HTML
+            //   input box:        <div contenteditable="true" role="textbox"> (Lexical editor)
+            //                     (Kimi **没有** textarea, 用 contenteditable div + Lexical)
+            //   no thinking block (搜 think/reasoning/cot/chain 0 命中; Kimi 暂时没 deepseek-style thinking)
+            assistantSel: '.chat-content-item-assistant',
+            userSel: '.chat-content-item-user',
             titleSel: '.chat-title, header .title',
-            inputSel: '.chat-input textarea, div[contenteditable="true"]',
+            inputSel: 'div[contenteditable="true"]',  // 去掉 `.chat-input textarea` (kimi.html 没 textarea)
         },
         claude: {
             name: 'Claude',

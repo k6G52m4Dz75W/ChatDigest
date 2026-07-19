@@ -1,7 +1,7 @@
 # 更新记录（CHANGELOG）
 
-**Latest: v1.16.0（脚本） / v1.2.8（Python 工具链） / 2026-07-19** — **Kimi 站点首次真正支持**:v1.15.16 之前 `ADAPTERS.kimi` 适配器代码虽然存在 (`assistantSel` / host 探测分支),但 `match` 是 `*://kimi.moonshot.cn/*` —— **该域名 Kimi 团队早已迁到 `www.kimi.com`**,`kimi.moonshot.cn` 现在空站 / 重定向,所以 v1.15.16 之前 **Kimi 站点上脚本根本跑不起来**(README 表格里 Kimi "✅ Supported" 是纸上谈兵,只有 DeepSeek 是真正在生产环境跑过验证)。**v1.16.0 修法**:`match` 从 `*://kimi.moonshot.cn/*` 改成 `*://www.kimi.com/*` + host 探测从 `host.includes('kimi') \|\| host.includes('moonshot')` 简化成 `host.includes('kimi.com')` (新域名是 `www.kimi.com`、含 `kimi.com`,简化为一个 OR 关键词,顺手清掉冗余的 `moonshot` 关键词——已无 match 走该分支,留 `\|\| 'moonshot'` 是死代码) + 中英 README 表格 Kimi URL 同步。**首次真正支持一个新站点**按 semver 是 **minor bump(1.15.16 → 1.16.0)**,不是 patch(不是 fix 既有行为,是从未 work 过的 stub 变成 work)也不是 major(无破坏性)。`version` 1.15.16 → 1.16.0,`IMATOOLS_VERSION` 不动(1.2.8 仍最新,Kimi URL 迁移是 userscript 端 UX 改动不是工具链改动)。**v1.15.11 ~ 1.15.16 的 fix / 清理全部保留** —— v1.16.0 是 Kimi 真正支持,不重做 v1.15.16 任何东西。pytest 仍 139 PASS(无 Python 改动)。**V8 仿真整段 IIFE 跑通**(zh-CN + en-US),菜单注册、IIFE 顶部"report bug"兜底、SUMMARY_PROMPT try/catch fallback、waitBody、host 探测全部正常。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,只是 version 改成 1.16.0)。**诚实优先教训**:README "✅ Supported" 标签必须代表"真正在生产环境验证过"——之前标 Kimi 是"有 stub 代码就标 yes",违反"标签要跟实际行为一致"原则。v1.16.0 起 Kimi 才真正支持,后续若新增 Claude / Doubao / Yuanbao 等站点,必须先有**真用户实测**才能在 README 表格标 ✅,否则用 🟡(stub)或 ❌(未支持)。
-Last 3 个脚本版本:v1.16.0(2026-07-19, Kimi 站点首次真正支持:match *://kimi.moonshot.cn/* → *://www.kimi.com/* + host 探测清理) / v1.15.16(2026-07-19, 清理 description 臃肿: 1833 → 240 chars) / v1.15.15(2026-07-18, 终极保险:IIFE 顶部菜单兜底 + 主流程 try/catch + alert 详细错误)。
+**Latest: v1.17.0（脚本） / v1.2.8（Python 工具链） / 2026-07-19** — **Kimi 站点真正支持(修 v1.16.0 stub selector)**:v1.16.0 改 `@match` 到 `*://www.kimi.com/*` + host 探测简化,但 `assistantSel/userSel/inputSel` 3 个 selector 全部从假设写、**实际 kimi.html DOM 不存在那些 class/attr** —— `getAssistantMessages()` 返回空,一键导出后续全失败。v1.17.0 用真实 DOM 测出 Kimi 实际结构: AI reply `.chat-content-item-assistant`、user message `.chat-content-item-user`、input box `div[contenteditable="true"]` (Lexical editor)、没 thinking block。`semver`: **1.16.0 → 1.17.0 minor** (跟 v1.16.0 同样逻辑 —— 首次真正支持一个新站点 = minor 而非 patch, 即使它是修 stub selector, 效果上是"从未 work 过的 stub 变 work" = 新可见能力)。`@version` 1.16.0 → 1.17.0。`IMATOOLS_VERSION` 不动(1.2.8 仍最新,Kimi selector 修是 userscript 端改动不是工具链改动)。**v1.15.11 ~ v1.16.0 的 fix / stub 全部保留** —— v1.17.0 是 Kimi 真正支持, 不重做 v1.16.0 任何东西。pytest 仍 139 PASS(无 Python 改动)。**V8 仿真整段 IIFE 跑通**(zh-CN + en-US),菜单注册、IIFE 顶部"report bug"兜底、SUMMARY_PROMPT try/catch fallback、waitBody、host 探测、getAssistantMessages 全部正常。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,version 改成 1.17.0)。**label honesty 教训**: README "✅ Supported" 标签必须代表"真正在生产环境验证过"—— v1.16.0 标 Kimi ✅ Supported 是错的, v1.17.0 README 表格 Kimi 行加 "(v1.17.0)" 显式说明何时真支持。,`kimi.moonshot.cn` 现在空站 / 重定向,所以 v1.15.16 之前 **Kimi 站点上脚本根本跑不起来**(README 表格里 Kimi "✅ Supported" 是纸上谈兵,只有 DeepSeek 是真正在生产环境跑过验证)。**v1.16.0 修法**:`match` 从 `*://kimi.moonshot.cn/*` 改成 `*://www.kimi.com/*` + host 探测从 `host.includes('kimi') \|\| host.includes('moonshot')` 简化成 `host.includes('kimi.com')` (新域名是 `www.kimi.com`、含 `kimi.com`,简化为一个 OR 关键词,顺手清掉冗余的 `moonshot` 关键词——已无 match 走该分支,留 `\|\| 'moonshot'` 是死代码) + 中英 README 表格 Kimi URL 同步。**首次真正支持一个新站点**按 semver 是 **minor bump(1.15.16 → 1.16.0)**,不是 patch(不是 fix 既有行为,是从未 work 过的 stub 变成 work)也不是 major(无破坏性)。`version` 1.15.16 → 1.16.0,`IMATOOLS_VERSION` 不动(1.2.8 仍最新,Kimi URL 迁移是 userscript 端 UX 改动不是工具链改动)。**v1.15.11 ~ 1.15.16 的 fix / 清理全部保留** —— v1.16.0 是 Kimi 真正支持,不重做 v1.15.16 任何东西。pytest 仍 139 PASS(无 Python 改动)。**V8 仿真整段 IIFE 跑通**(zh-CN + en-US),菜单注册、IIFE 顶部"report bug"兜底、SUMMARY_PROMPT try/catch fallback、waitBody、host 探测全部正常。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,只是 version 改成 1.16.0)。**诚实优先教训**:README "✅ Supported" 标签必须代表"真正在生产环境验证过"——之前标 Kimi 是"有 stub 代码就标 yes",违反"标签要跟实际行为一致"原则。v1.16.0 起 Kimi 才真正支持,后续若新增 Claude / Doubao / Yuanbao 等站点,必须先有**真用户实测**才能在 README 表格标 ✅,否则用 🟡(stub)或 ❌(未支持)。
+Last 3 个脚本版本:v1.17.0(2026-07-19, Kimi 真正支持:修 v1.16.0 stub selector 3 处 + semver minor) / v1.16.0(2026-07-19, Kimi 站点 @match 迁到 www.kimi.com + host 探测简化, 实际是 stub) / v1.15.16(2026-07-19, 清理 description 臃肿: 1833 → 240 chars)。
 Last 3 个 Python 工具链版本：v1.2.8（2026-07-18, ~/ → %USERPROFILE% user-facing 统一）/ v1.2.7（2026-07-18, P3.15 immutable modules 修复）/ v1.2.6（2026-07-18, type hints + LICENSE + CHANGELOG summary）。
 
 ## 仓库文档变更（README / 元数据）
@@ -20,6 +20,103 @@ Last 3 个 Python 工具链版本：v1.2.8（2026-07-18, ~/ → %USERPROFILE% us
 - **2026-07-19：v1.15.16 同步 `match` 头部精简(两步)** — 跟上面 README 表格精简保持一致,移除两条重复的 DeepSeek match 行:① `*://deepseek.com/*`(无 www, 历史上 v1.15.10 加的"备用"行, 实际 `www.deepseek.com` 跟 `chat.deepseek.com` 都会自动跳转或重定向到主站) ② `*://www.deepseek.com/*`(用户实测发现仍残留)。7 个 match 行剩 6 个, 跟 README 表格 6 行已支持站点 1:1 对应(`chat.deepseek.com` ↔ DeepSeek / `chatgpt.com` ↔ ChatGPT / `kimi.moonshot.cn` ↔ Kimi / `claude.ai` ↔ Claude / `www.doubao.com` ↔ 豆包 / `yuanbao.tencent.com` ↔ 元宝)。这个改动属于 userscript 元数据清理, 但**不** bump `version`(0 行为变化)。
 
 ---
+
+## v1.17.0：Kimi 站点真正支持 — 修 v1.16.0 stub selector + 重新实测 (2026-07-19)
+
+> **TL;DR**: v1.16.0 发布的"Kimi 首次真正支持"实际是 stub —— `assistantSel/userSel/inputSel` 3 个 selector 全部从假设写的、**实际 Kimi 页面根本不存在那些 class/attr**。`@match` 迁到 `www.kimi.com` 后脚本能注入 SUMMARY_PROMPT（用户看到输入框有咒语），但 `getAssistantMessages()` 返回空，**一键导出后续全失败**。v1.17.0 用真实 DOM 测出的 selector 重写适配器。
+
+### 🚨 v1.16.0 stub bug 发现过程
+
+v1.16.0 commit `57b1668` 改 `*://kimi.moonshot.cn/*` → `*://www.kimi.com/*` + host 探测简化，但 `assistantSel: '.kimi-message-content, [data-role="assistant"]'` 跟 `userSel: '[data-role="user"]'` 跟 `inputSel: '.chat-input textarea, div[contenteditable="true"]'` **全是从假设写的、没真测过**。CI 跑通、release body 2240 chars、API verify 全 PASS —— 按 agent memory "**回归测试 PASS ≠ 框架实际工作**" —— 真实 Kimi 站点上一键导出：注入 SUMMARY_PROMPT 成功 → AI 实际回复 → **但 `getAssistantMessages()` 找不到节点 → `getLatestReply()` 返回 null → 整个一键导出流程 fail**。
+
+用户实测反馈"现在一键导出只能抓到输入框输入文字，后续都是失败的"——本以为是 selector 部分错，**audit 实际是 selector 全错**。
+
+### 🩺 根因（用 kimi.html 实测 DOM 校对）
+
+| Selector (v1.16.0 stub) | kimi.html 实际存在? | 真实 selector (v1.17.0) |
+|---|---|---|
+| `.kimi-message-content` | **0 命中** | `.chat-content-item-assistant` |
+| `[data-role="assistant"]` | **0 命中** | (同上) |
+| `[data-role="user"]` | **0 命中** | `.chat-content-item-user` |
+| `.chat-input textarea` | **0 命中** (kimi.html **没 textarea**) | `div[contenteditable="true"]` (Lexical editor) |
+
+**kimi.html 实际 DOM 结构** (4 个 `.chat-content-item`，2 user + 2 AI 对话 round)：
+
+```html
+<!-- user message -->
+<div class="chat-content-item chat-content-item-user">
+  <div class="segment segment-user">
+    <div class="user-content">手臂上这样的纹身...</div>
+  </div>
+</div>
+
+<!-- AI reply -->
+<div class="chat-content-item chat-content-item-assistant">
+  <div class="segment segment-assistant">
+    <div class="markdown-container">
+      <div class="markdown">
+        <div class="paragraph">从图片来看...</div>
+        <h2>常见寓意</h2>
+        <ul><li>...</li></ul>
+        <table>...</table>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+**额外发现**：
+- Kimi 用 **Lexical editor** (`data-lexical-editor="true"` / `data-lexical-text="true"`)，**不是 textarea**
+- **没有 thinking block**（搜 think/reasoning/cot/chain 全 0 命中）—— Kimi 暂时没 deepseek-style 思考链，`messageToMd` 走"非 DeepSeek 路径"（clone + 移除 UI chrome + `blockToMd`）能正常处理
+
+### 🔧 修法（cascade sync 5 处）
+
+| # | 文件 | 改动 |
+|---|------|------|
+| ① | `chatdigest.user.js:87-95` | Kimi 适配器 3 个 selector 全部重写 + 加详细注释（真实 DOM 结构 + 跟 v1.16.0 stub 对比） |
+| ② | `chatdigest.user.js:4` | `@version` 1.16.0 → **1.17.0** (semver minor) |
+| ③ | `README.md:42` | Kimi 行加 "✅ Supported (v1.17.0)"（label 修正：v1.16.0 "Supported" 是错的） |
+| ④ | `README.zh.md:42` | Kimi 行加 "✅ 已支持 (v1.17.0)" |
+| ⑤ | `CHANGELOG.md` | 顶部 summary + Last 3 + 加本 entry |
+
+### 📊 semver 选择
+
+**`1.16.0 → 1.17.0`（minor bump, 不是 patch）**
+
+按 v1.16.0 总结的"首次真正支持一个新站点 = minor"原则，**反过来**也适用：**v1.16.0 自称"真正支持"但实际是 stub**——v1.17.0 修 selector 后才**真正**支持 Kimi，所以是 minor bump 修复 stub bug，不是 patch 级 bug fix。
+
+**关键判断**：
+- patch = 修已有 broken 行为（用户已能用 + 修 bug）—— ❌ Kimi v1.16.0 用户**完全不能**用一键导出，不是"已有 broken 行为"
+- minor = 新增可见能力（用户从不能用 → 能用）—— ✓ Kimi v1.17.0 用户**真正**能用一键导出，等于**新功能上线**
+
+### ⚠️ 教训（label honesty / 实战回归）
+
+- **README "✅ Supported" 标签必须代表"真用户实测过"**：v1.16.0 标 Kimi "✅ Supported" 但实际是 stub，违反"标签要跟实际行为一致"原则。v1.17.0 改 label 加 "(v1.17.0)" 显式说明**何时**真支持。
+- **CI 跑通 ≠ 框架实际工作**：v1.16.0 release verify 7 个 check 全 PASS（包括 body length 2240、mention 0 命中、Contributors 1 个真实 author），**但 Kimi 实际不能用**——CI 只 verify 文本格式、不 verify 实际 DOM selector 工作。**JS 端 0 单测**，selector 错误没人发现直到用户实测反馈。
+- **"0 测试覆盖"的代价**：v1.16.0 entry 写过"0 测试覆盖:JS 端 0 单测,host 探测 + match 模式都是 runtime;**手动验证清单**（必做）① 安装/更新 userscript → ... ② 点 FAB(📑)→ 应该触发'总结咒语'自动注入 + 发送 + 等待 AI 回复 + 自动保存"——**这一步如果当时真做了, v1.16.0 stub 立刻能发现**。v1.17.0 之前没人按这个清单实测。
+- **未来防御**（同 v1.15.13 教训）：在 `tests/test_js_pure_equivalents.py` 加一个"DOM fixture 集成测试"——把 `kimi.html` (用 `gitignore` 排除本地调试文件) 里的关键 DOM 节点 dump 成 fixture，selector 写错时静态扫描立即 fail。但 fixture 维护负担大 —— 候选方案不在 v1.17.0 scope。
+
+### 🔗 cascade bump 必要性
+
+按 agent memory "**cascade fix 必须 cascade bump，不假装旧版稳态**"：
+- v1.16.0 自称"修 selector"实际是错 selector → v1.17.0 是真正修
+- v1.16.0 Tampermonkey 用户拿不到 fix（除非手动 disable + 重装）—— bump @version 让 Tampermonkey 自动检测新版本
+- 不 bump 的话 v1.16.0 release page 继续撒谎"v1.16.0 Kimi 真正支持" —— 必须 bump
+
+`@version` 1.16.0 → 1.17.0。`IMATOOLS_VERSION` 不动（1.2.8 仍最新，Kimi selector 修是 userscript 端改动不是工具链改动）。pytest 仍 139 PASS（无 Python 改动）。
+
+### 📝 手动验证清单（必做，按顺序）
+
+1. Tampermonkey 仪表盘 → 找 "ChatDigest / 聊摘" → version 是不是 **1.17.0**
+2. 打开 `https://www.kimi.com` → F12 Console 看到 `✅ ChatDigest started · Kimi` 字样
+3. **真实对话 round 至少 1 个**（先问 Kimi 一个问题让它回复）
+4. 点 FAB（📑）→ 触发总结咒语注入 + 发送 + 等待 + 自动保存
+5. 下载的 `.md` 文件应该含 **完整对话**：user 提问 + AI 回复（不是只有注入的 SUMMARY_PROMPT 文本）
+6. F12 Console 看到 `[ChatDigest] ...` log，无 `404 adapter not found` 之类 fallthrough
+
+### 🏷️ release 重建
+
+v1.16.0 release page 自称"首次真正支持 Kimi"是错的——v1.17.0 release 重建时**改 v1.16.0 description 反映事实**（"v1.16.0 改 @match, v1.17.0 才真正支持"），但 release 仍是 v1.16.0（已经发布的 release 不能改 body），新 v1.17.0 release 反映新事实。**v1.16.0 release page description 保留历史**（按 agent memory "不删非自生成文件 / 不覆盖用户事实"），不动 body；v1.17.0 release 显式说明"v1.16.0 Kimi selector 全错，v1.17.0 真支持"。
 
 ## v1.16.0：Kimi 站点首次真正支持 (2026-07-19)
 

@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0   # 拿全 git log, 软引用 commit message 才不会断
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -111,9 +111,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           name: ${{ steps.version.outputs.version }}
           body_path: release_body.md
-          # fail_on_unmatched_files: body_path 找不到文件时 fail (默认 true 但显式声明更稳)
-          # fail_on_unset_body: 同样保险
+          # fail_on_unmatched_files: body_path 找不到文件时 fail (默认 true, 显式声明更稳)
           fail_on_unmatched_files: true
-          fail_on_unset_body: true
           # 不让 GitHub 自动生成 notes 混进 release body
           generate_release_notes: false

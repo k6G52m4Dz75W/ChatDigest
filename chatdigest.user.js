@@ -92,8 +92,10 @@
             // 实际那时注入成功但 getAssistantMessages() 返回空, 一键导出后续全失败.
             // 真实 DOM (kimi.html 实测):
             //   user message:     <div class="chat-content-item chat-content-item-user">
-            //                     └ <div class="segment segment-user">
-            //                       └ <div class="user-content">用户文本
+            //                     ├ <div class="segment segment-user">
+            //                     │   └ <div class="user-content">用户文本
+            //                     └ <div class="segment-user-action-row">
+            //                         └ [编辑 / 复制 / 分享] 按钮（应剔除）
             //   AI reply:         <div class="chat-content-item chat-content-item-assistant">
             //                     └ <div class="segment segment-assistant">
             //                       └ <div class="markdown-container"><div class="markdown">
@@ -101,8 +103,12 @@
             //   input box:        <div contenteditable="true" role="textbox"> (Lexical editor)
             //                     (Kimi **没有** textarea, 用 contenteditable div + Lexical)
             //   no thinking block (搜 think/reasoning/cot/chain 0 命中; Kimi 暂时没 deepseek-style thinking)
+            // userSel 故意选 .user-content 而不是 .chat-content-item-user：后者包含
+            // 同级的 .segment-user-action-row（编辑/复制/分享 按钮），其 class 名
+            // 是 segment-user-action-row / simple-button，不带 ds- 前缀，isUiChrome
+            // 不会拦，会把按钮文字当正文带出。直接选 .user-content 绕过这个坑。
             assistantSel: '.chat-content-item-assistant',
-            userSel: '.chat-content-item-user',
+            userSel: '.chat-content-item-user .user-content',
             titleSel: '.chat-title, header .title',
             inputSel: 'div[contenteditable="true"]',  // 去掉 `.chat-input textarea` (kimi.html 没 textarea)
         },

@@ -916,11 +916,14 @@
     /* 从抓取内容提取一段纯文本摘要，用于 YAML frontmatter 的 description。
        策略：跳过 H1 行（标题已由 frontmatter title 承载，不重复），取之后
        的前 N 字符（默认 100）。
-       清洗规则：保留列表 bullet / 数字（结构信息，不只是格式装饰），
-       strip 其他行内/行首装饰（标题标记 / 引用 / 表格行 / 围栏内代码 /
-       bold / inline code / link / image），只留纯文本。
+       清洗规则：保留列表 bullet / 数字（结构信息），strip 其他行内/行首
+       装饰（标题标记 / 引用 / 表格行 / 围栏内代码 / bold / italic /
+       inline code / link / image），只留纯文本。
        不特意区分 H2/H3——用户视角下"开头那段"就是描述，不预先找 H2
-       当 prefix；万一没 H2 也不影响。 */
+       当 prefix；万一没 H2 也不影响。
+       italic 跟 bullet `*` 的区分：bullet 行首 `*` 后面必跟空格，italic
+       `*` 后面跟非空格非 `*` 字符——所以在 per-line 阶段处理 italic 时
+       用 `\*([^*\s][^*\n]*?)\*` 卡住，bullet 不会被误杀。 */
     function extractDescription(md, maxLen) {
         maxLen = maxLen || 100;
         const lines = (md || '').split('\n');
@@ -941,22 +944,31 @@
                 if (buf.length) buf.push(' ');  // 空行 → 段落分隔
                 continue;
             }
-            // 保留列表 bullet/number（结构信息），strip 其他行首装饰
-            const cleaned = raw
+            // 行首装饰：strip 标题/引用/表格行；保留列表 bullet/number
+            let cleaned = raw
                 .replace(/^#{1,6}\s+/, '')     // 标题标记（H2/H3/...）
                 .replace(/^>\s?/, '')          // 引用
                 .replace(/^\|.*\|$/, '')       // 表格行
                 .trim();
             if (!cleaned) continue;
+            // per-line 阶段 strip 行内装饰：bold / image / link / italic /
+            // inline code。**顺序很关键**——image 必须在 link 之前跑，
+            // 否则 link regex 会把 `![alt](url)` 里的 `[alt](url)` 当成
+            // 普通 link 吃掉，留下 `!alt` 没法被后续 image regex 识别。
+            // italic 跟 bullet 的 `*` 通过 [^*\s] 区分：bullet 后必接
+            // 空格（不在 [^*\s] 范围），italic 后必接非空非 `*` 字符
+            // （在 [^*\s] 范围），bullet 不会被误杀。
+            cleaned = cleaned
+                .replace(/\*\*([^*]+)\*\*/g, '$1')             // bold
+                .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')       // image（先于 link）
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')        // link
+                .replace(/\*([^*\s][^*\n]*?)\*/g, '$1')        // italic
+                .replace(/`([^`]+)`/g, '$1')                    // inline code
+                .trim();
+            if (!cleaned) continue;
             buf.push(cleaned);
         }
-        const text = buf.join(' ')
-            .replace(/\*\*([^*]+)\*\*/g, '$1')             // bold
-            .replace(/`([^`]+)`/g, '$1')                    // inline code
-            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')        // link
-            .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')       // image
-            .replace(/\s+/g, ' ')
-            .trim();
+        const text = buf.join(' ').replace(/\s+/g, ' ').trim();
         if (!text) return '';
         return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
     }

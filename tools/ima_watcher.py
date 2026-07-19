@@ -42,6 +42,7 @@ ima_upload.py（官方 OpenAPI + 腾讯云 COS）完成。
 import argparse
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -53,6 +54,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ima_upload  # noqa: E402
 
 DEFAULT_PORT = 8765
+
+# 文件名清洗规则（与 chatdigest.user.js 的 sanitizeTitle 严格对齐）。
+#
+# userscript 端 sanitizeTitle 用 [\\/:*?"<>|\n\r\t#] 黑名单；bridge 落盘
+# 阶段原本用 isalnum + '._- ' 白名单，' + ' 不在白名单 → ' + ' 被替换为 '_'，
+# 跟 userscript 下载到 Downloads/ 的文件名不一致。改为同一份黑名单：
+_FILENAME_UNSAFE_RE = re.compile(r'[\\/*?:"<>|\n\r\t#]')
 
 # ---------------------------------------------------------------------------
 # HTTP 接收端限流（v1.2.5 新增）
@@ -112,7 +120,7 @@ def import_to_kb(path: str, kb_id: str):
 def ingest_content(content: str, filename: str, watch_dir: str, kb_id: str) -> bool:
     """把推送来的 Markdown 内容落盘到 watch_dir，再上传到知识库。"""
     os.makedirs(watch_dir, exist_ok=True)
-    safe = ''.join(c if c.isalnum() or c in '._- ' else '_' for c in filename) or 'note.md'
+    safe = _FILENAME_UNSAFE_RE.sub('_', filename) or 'note.md'
     if not safe.lower().endswith('.md'):
         safe += '.md'
     path = os.path.join(watch_dir, safe)

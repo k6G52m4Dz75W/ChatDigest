@@ -39,7 +39,7 @@
 | ---------------- | ----------------------- | --------- | ----------------- | ----------------- |
 | DeepSeek         | `chat.deepseek.com`     | ✅ 已支持 | ✅                | ✅                |
 | ChatGPT          | `chatgpt.com`           | ✅ 已支持 | ✅                | ✅                |
-| Kimi             | `kimi.moonshot.cn`      | ✅ 已支持 | ✅                | ✅                |
+| Kimi             | `www.kimi.com`          | ✅ 已支持 | ✅                | ✅                |
 | Claude           | `claude.ai`             | ✅ 已支持 | ✅                | ✅                |
 | 豆包             | `www.doubao.com`        | ✅ 已支持 | ✅                | ✅                |
 | 元宝             | `yuanbao.tencent.com`   | ✅ 已支持 | ✅                | ✅                |

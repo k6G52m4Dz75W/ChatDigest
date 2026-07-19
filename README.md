@@ -39,7 +39,7 @@
 | ---------------- | ----------------------- | -------------- | ------------------------- | --------------- |
 | DeepSeek         | `chat.deepseek.com`     | ✅ Supported   | ✅                        | ✅              |
 | ChatGPT          | `chatgpt.com`           | ✅ Supported   | ✅                        | ✅              |
-| Kimi             | `kimi.moonshot.cn`      | ✅ Supported   | ✅                        | ✅              |
+| Kimi             | `www.kimi.com`          | ✅ Supported   | ✅                        | ✅              |
 | Claude           | `claude.ai`             | ✅ Supported   | ✅                        | ✅              |
 | Doubao (豆包)    | `www.doubao.com`        | ✅ Supported   | ✅                        | ✅              |
 | Yuanbao (元宝)   | `yuanbao.tencent.com`   | ✅ Supported   | ✅                        | ✅              |

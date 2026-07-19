@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         ChatDigest / 聊摘 — AI 对话一键整理为 Markdown 知识库
 // @namespace    https://github.com/chatdigest
-// @version      1.15.16
+// @version      1.16.0
 // @description  ChatDigest / 聊摘 — 一键把 AI 对话整理成 Markdown 知识库文章。完全本地 / 无订阅 / 无需 API key / 多站点 (DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝) / 隐私优先 / 玻璃拟态 UI。可选推送到 IMA、Obsidian 等任意 Markdown 友好工具。locale-aware 文件名 (zh = 聊摘, 其他 = ChatDigest)。变更历史见 CHANGELOG.md。
 // @author       ChatDigest Contributors
 // @match        *://chat.deepseek.com/*
 // @match        *://chatgpt.com/*
-// @match        *://kimi.moonshot.cn/*
+// @match        *://www.kimi.com/*
 // @match        *://claude.ai/*
 // @match        *://www.doubao.com/*
 // @match        *://yuanbao.tencent.com/*
@@ -119,7 +119,7 @@
         const host = location.hostname;
         if (host.includes('deepseek')) return ADAPTERS.deepseek;
         if (host.includes('chatgpt') || host.includes('openai')) return ADAPTERS.chatgpt;
-        if (host.includes('kimi') || host.includes('moonshot')) return ADAPTERS.kimi;
+        if (host.includes('kimi.com')) return ADAPTERS.kimi;
         if (host.includes('claude')) return ADAPTERS.claude;
         if (host.includes('doubao')) return ADAPTERS.doubao;
         if (host.includes('yuanbao') || host.includes('tencent')) return ADAPTERS.yuanbao;

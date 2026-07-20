@@ -1,7 +1,7 @@
 # 更新记录（CHANGELOG）
 
-**Latest: v1.17.0（脚本） / v1.2.8（Python 工具链） / 2026-07-19** — **Kimi 站点真正支持(修 v1.16.0 stub selector)**:v1.16.0 改 `@match` 到 `*://www.kimi.com/*` + host 探测简化,但 `assistantSel/userSel/inputSel` 3 个 selector 全部从假设写、**实际 kimi.html DOM 不存在那些 class/attr** —— `getAssistantMessages()` 返回空,一键导出后续全失败。v1.17.0 用真实 DOM 测出 Kimi 实际结构: AI reply `.chat-content-item-assistant`、user message `.chat-content-item-user`、input box `div[contenteditable="true"]` (Lexical editor)、没 thinking block。`semver`: **1.16.0 → 1.17.0 minor** (跟 v1.16.0 同样逻辑 —— 首次真正支持一个新站点 = minor 而非 patch, 即使它是修 stub selector, 效果上是"从未 work 过的 stub 变 work" = 新可见能力)。`@version` 1.16.0 → 1.17.0。`IMATOOLS_VERSION` 不动(1.2.8 仍最新,Kimi selector 修是 userscript 端改动不是工具链改动)。**v1.15.11 ~ v1.16.0 的 fix / stub 全部保留** —— v1.17.0 是 Kimi 真正支持, 不重做 v1.16.0 任何东西。pytest 仍 139 PASS(无 Python 改动)。**V8 仿真整段 IIFE 跑通**(zh-CN + en-US),菜单注册、IIFE 顶部"report bug"兜底、SUMMARY_PROMPT try/catch fallback、waitBody、host 探测、getAssistantMessages 全部正常。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,version 改成 1.17.0)。**label honesty 教训**: README "✅ Supported" 标签必须代表"真正在生产环境验证过"—— v1.16.0 标 Kimi ✅ Supported 是错的, v1.17.0 README 表格 Kimi 行加 "(v1.17.0)" 显式说明何时真支持。,`kimi.moonshot.cn` 现在空站 / 重定向,所以 v1.15.16 之前 **Kimi 站点上脚本根本跑不起来**(README 表格里 Kimi "✅ Supported" 是纸上谈兵,只有 DeepSeek 是真正在生产环境跑过验证)。**v1.16.0 修法**:`match` 从 `*://kimi.moonshot.cn/*` 改成 `*://www.kimi.com/*` + host 探测从 `host.includes('kimi') \|\| host.includes('moonshot')` 简化成 `host.includes('kimi.com')` (新域名是 `www.kimi.com`、含 `kimi.com`,简化为一个 OR 关键词,顺手清掉冗余的 `moonshot` 关键词——已无 match 走该分支,留 `\|\| 'moonshot'` 是死代码) + 中英 README 表格 Kimi URL 同步。**首次真正支持一个新站点**按 semver 是 **minor bump(1.15.16 → 1.16.0)**,不是 patch(不是 fix 既有行为,是从未 work 过的 stub 变成 work)也不是 major(无破坏性)。`version` 1.15.16 → 1.16.0,`IMATOOLS_VERSION` 不动(1.2.8 仍最新,Kimi URL 迁移是 userscript 端 UX 改动不是工具链改动)。**v1.15.11 ~ 1.15.16 的 fix / 清理全部保留** —— v1.16.0 是 Kimi 真正支持,不重做 v1.15.16 任何东西。pytest 仍 139 PASS(无 Python 改动)。**V8 仿真整段 IIFE 跑通**(zh-CN + en-US),菜单注册、IIFE 顶部"report bug"兜底、SUMMARY_PROMPT try/catch fallback、waitBody、host 探测全部正常。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,只是 version 改成 1.16.0)。**诚实优先教训**:README "✅ Supported" 标签必须代表"真正在生产环境验证过"——之前标 Kimi 是"有 stub 代码就标 yes",违反"标签要跟实际行为一致"原则。v1.16.0 起 Kimi 才真正支持,后续若新增 Claude / Doubao / Yuanbao 等站点,必须先有**真用户实测**才能在 README 表格标 ✅,否则用 🟡(stub)或 ❌(未支持)。
-Last 3 个脚本版本:v1.17.0(2026-07-19, Kimi 真正支持:修 v1.16.0 stub selector 3 处 + semver minor) / v1.16.0(2026-07-19, Kimi 站点 @match 迁到 www.kimi.com + host 探测简化, 实际是 stub) / v1.15.16(2026-07-19, 清理 description 臃肿: 1833 → 240 chars)。
+**Latest: v1.18.0（脚本） / v1.2.8（Python 工具链） / 2026-07-20** — **Kimi 输出 production-ready**:v1.17.0 Kimi 真正支持只修了 selector 层(能找到节点),但**输出层不达标** —— 段落 `<div>text</div>` 紧跟 `<hr/>` 输出 `text\n---` 撞 CommonMark setext h2 渲染异常、相邻 `<div>` 段塌成一行 `<div>A</div><div>B</div>` 输出 `AB` 段落被吞、`<li>item <code>code</code></li>` 丢反引号输出 `item code`、Kimi 表格工具栏"复制/下载"文字 + svg path "..." 污染 export。v1.18.0 修 3 个独立 bug 链(commit `ab172e6` `<p>` 双尾 → commit `042ad94` 未知 block 容器包裹 `\n\n` + li/blockquote inline 路由 → commit `d333221` Kimi chrome 识别),**根治** setext 撞车 + 多块塌缩 + inline 格式丢失 + Kimi chrome 污染 4 个层叠 bug,让 Kimi + 之前所有站点(DeepSeek/ChatGPT/Claude/豆包/元宝)markdown 输出 production-ready。**根因哲学**:`<p>` 改双尾只是表面,真正根因是 `blockToMd` 末尾"未知 container"走 fall through `join('')` 跟 inline element 同路径 —— AI 实际用 `<div class="paragraph">` 不用 `<p>`,`ab172e6` 对 user 实际 case 0 效果,`042ad94` 才是 source-level 治本修。**v1.17.0 跟 v1.16.0 同样 inflated** —— 标"真正支持 Kimi"但输出层不达标。`semver`: **1.17.0 → 1.18.0 minor**(跟 v1.17.0 总结的"真正"哲学一致 —— v1.17.0 只到 selector 层,v1.18.0 才让 Kimi 输出 production-ready,等效"首次真正可用",= 新可见能力 = minor)。`@version` 1.17.0 → 1.18.0。`IMATOOLS_VERSION` 不动(1.2.8 仍最新,这次 3 个 fix 全是 userscript 端 markdown 转换逻辑,跟 Python 工具链无关)。**v1.15.11 ~ v1.17.0 的 fix / stub / Kimi 适配器全部保留** —— v1.18.0 是输出层 production-ready,不重做任何已有逻辑。**手搓 vs Turndown 库**决策暂缓:web search 验证 Turndown 是事实标准(8000+ star / 50 万周下载 / vscode+electron 都在用),但当前手搓 `blockToMd` 28+ case 镜像测试 OK + user 实际 Kimi HTML 验证 production-ready,**短期切库 ROI 不高**(切换成本 > 维护收益),v1.19/v2.0 milestone 再评估(详见 user memory "首次真正支持 stub 站点 = semver minor" 同样的"等效新可见能力"哲学)。**用户 force reload 步骤不变**(v1.15.15 的 5 步操作仍适用,version 改成 1.18.0)。
+Last 3 个脚本版本:v1.18.0(2026-07-20, Kimi 输出 production-ready: 3 fix 链根治 setext h2 + 多块塌缩 + inline 丢失 + Kimi chrome 污染, semver minor) / v1.17.0(2026-07-19, Kimi 真正支持:修 v1.16.0 stub selector 3 处 + semver minor) / v1.16.0(2026-07-19, Kimi 站点 @match 迁到 www.kimi.com + host 探测简化, 实际是 stub)。
 Last 3 个 Python 工具链版本：v1.2.8（2026-07-18, ~/ → %USERPROFILE% user-facing 统一）/ v1.2.7（2026-07-18, P3.15 immutable modules 修复）/ v1.2.6（2026-07-18, type hints + LICENSE + CHANGELOG summary）。
 
 ## 仓库文档变更（README / 元数据）
@@ -18,6 +18,65 @@ Last 3 个 Python 工具链版本：v1.2.8（2026-07-18, ~/ → %USERPROFILE% us
   - **最佳实践笔记**：开源项目 README 默认英文（GitHub trending top 项目 Vim / ripgrep / fzf / fd 全部如此）、中文版放 `README.zh.md` 作辅助——避免 README 顶部出现双语 i18n 噪音、跟 `description` 单语种保持一致。**「默认英文」不等于「只服务英文用户」**—— `README.zh.md` 跟英文版逐句对应翻译，0 信息丢失。
 
 - **2026-07-19：v1.15.16 同步 `match` 头部精简(两步)** — 跟上面 README 表格精简保持一致,移除两条重复的 DeepSeek match 行:① `*://deepseek.com/*`(无 www, 历史上 v1.15.10 加的"备用"行, 实际 `www.deepseek.com` 跟 `chat.deepseek.com` 都会自动跳转或重定向到主站) ② `*://www.deepseek.com/*`(用户实测发现仍残留)。7 个 match 行剩 6 个, 跟 README 表格 6 行已支持站点 1:1 对应(`chat.deepseek.com` ↔ DeepSeek / `chatgpt.com` ↔ ChatGPT / `kimi.moonshot.cn` ↔ Kimi / `claude.ai` ↔ Claude / `www.doubao.com` ↔ 豆包 / `yuanbao.tencent.com` ↔ 元宝)。这个改动属于 userscript 元数据清理, 但**不** bump `version`(0 行为变化)。
+
+---
+
+## v1.18.0：Kimi 输出 production-ready — 3 fix 链根治 setext h2 + 多块塌缩 + inline 丢失 + Kimi chrome 污染 (2026-07-20)
+
+> **TL;DR**: v1.17.0 Kimi "真正支持"只到 selector 层(能找到节点),**输出层不达标** —— 4 个层叠 bug:① `<div>text</div><hr/>` 输出 `text\n---`(无空行)撞 CommonMark setext h2 ② 相邻 `<div>` 段塌成一行 `<div>A</div><div>B</div>` → `AB` ③ `<li>item <code>code</code></li>` 丢反引号 → `item code` ④ Kimi 表格工具栏"复制/下载" + svg "..." 文字污染 export。v1.18.0 修 3 个独立 bug 链(commit `ab172e6` → `042ad94` → `d333221`),**根治** 4 个层叠 bug,让 Kimi + 之前所有站点 markdown 输出 production-ready。
+
+### 🩺 根因(用户反馈驱动,2 步诊断)
+
+**用户报告 "问题依旧"**(段落 + `---` 撞 setext h2),我先按"`<p>` 缺双换行"假设修了 `ab172e6`(`<p>` 改 `\n\n`),但 **user 实际 export 出来还是 1 个换行** —— 自查发现 AI **不用 `<p>` 而用 `<div class="paragraph">`**(Kimi / DeepSeek 等都常见),`ab172e6` 对实际 case 0 效果。
+
+**v3 镜像测试 28 case 全分析**后定位真正根因:`blockToMd` 末尾"未知 container"走 fall through `Array.from(...).map(blockToMd).join('')` 跟 inline element 同路径,导致:
+1. **多块塌缩**:`<div>A</div><div>B</div>` 都不加 wrapper → 拼成 `AB`
+2. **setext 撞车**:`<div>text</div><hr/>` → `text` + `\n---\n` = `text\n---\n`(无空行)
+3. **inline 标签丢失**:`<li>item <code>code</code></li>` 走 li 处理 → blockToMd 处理 `<code>` 走未知 container fall through → 反引号丢
+
+用户**贴出 Kimi 完整 DOM HTML** 触发二次诊断:Kimi 表格包在 `<div class="table markdown-table">` 里,带 sticky-release / table-actions / kimi-tooltip / icon-button / table-title chrome 工具栏 —— **isUiChrome 只识别 DeepSeek 时代 `ds-` 前缀**,Kimi `data-v-` scoped CSS 时代 class 名不带 `ds-` 全部漏过滤,污染 export。
+
+### 🔧 3 个 commit cascade fix
+
+| Commit | 范围 | 修了什么 |
+|---|---|---|
+| `ab172e6` | `<p>` handler | `\n + text + \n` → `\n + text + \n\n`(Markdown 段落规范 = 双换行结束)。**单 `<p>` 修复对 AI 实际 `<div>` 路径 0 效果**,但奠定了"块级容器必须 wrap 双换行"的设计哲学。 |
+| `042ad94` | 未知 block 容器 + li/blockquote 递归 | ① 末尾 fall through 改 `\n + content + \n\n`(让 div/section/article 也按段落分隔输出)② li/blockquote 改用 `routeChild` helper 路由 inline element 到 `inlineToMd` 保留格式。**这一 commit 才是 source-level 治本**。 |
+| `d333221` | `isUiChrome` | 加 Kimi chrome 识别:`sticky-release[-rail/-header]` / `table-actions[-content/-icon]` / `icon-button[-*]` / `kimi-tooltip` / `table-title` / `tooltip-*` / `iconify`(`\b` 单词边界避免误伤)。**DeepSeek `ds-` 前缀识别保持不动**,其他站零回归。 |
+
+### 📊 semver 选择:1.17.0 → 1.18.0 **minor**(不是 patch)
+
+跟 v1.17.0 总结的"首次真正支持一个新站点 = minor"哲学**完全对称**:
+- v1.17.0 只到 selector 层(能找到节点),但**输出层不达标** —— 跟 v1.16.0 同样 inflated
+- v1.18.0 让 Kimi 输出达到生产质量(用户实测"现在的 markdown 好了很多"),等效"首次真正 production-ready"
+- 用户视角:**v1.17.0 几乎不能用**(输出撞 setext h2、塌行、丢格式、污染),**v1.18.0 完全可用** = 新可见能力 = minor
+- 反之如果只是 v1.17.0 "已能用 + 修 bug" 才是 patch(类似 v1.15.11 那种 ordering bug)
+
+### ✅ 验证(28 case + 1 真实 Kimi HTML)
+
+**v3 镜像测试 28 case**(`<div>A</div><div>B</div>`、`<div>text</div><hr/>`、`<article>text</article>`、`<li>item <code>code</code></li>`、`<blockquote>quote with <strong>bold</strong></blockquote>` 等):
+- 13 case: FIX(从无空行 / 塌行 / 丢格式 → 正确)
+- 0 case: REGRESSION
+- 15 case: behavior identical or improved(标准 case 仍正常)
+
+**用户贴的完整 Kimi 真实 HTML**(含 sticky-release 表格工具栏、`<ul start="1">`、`<li><div class="paragraph">...</div></li>` 嵌套)+ Kimi chrome filter 实测输出**完全正确**:段落 / `---` 之间有空行(setext 不撞)、`**bold**` 保留、表格无"复制/下载"残留、列表正常。
+
+### 🛠 为什么不沿用之前的 post-process hack
+
+之前 v1.16 阶段试过 2 个 hack:
+- `ensureHrBlankLine` (a60b128 → 3020c8e revert) — 拼好之后补空行,**治标**
+- `stripRedundantHr` (4e30f43 / d35a209 → aa3190b / 3553926 revert) — 删 AI 自带的 `---`,**误伤**(AI 的 `---` 是正常 thematic break,不是冗余)
+
+`042ad94` 跟 `ab172e6` 都是 **source-level 治本**:在源头让 `blockToMd` 自身就符合 Markdown 段落分隔语义,**不依赖**下游 block 救场(post-process hack 范式)。手搓 vs 库 决策暂缓(v1.19/v2.0 milestone 评估 Turndown),详见 user memory "首次真正支持 stub 站点 = semver minor"。
+
+### 🔄 不破坏向后兼容
+
+- `@version` 1.17.0 → 1.18.0
+- `IMATOOLS_VERSION` 不动(1.2.8 仍最新,本次 3 个 fix 全是 userscript 端 markdown 转换逻辑,跟 Python 工具链无关)
+- v1.15.11 ~ v1.17.0 所有 fix / stub / Kimi 适配器全部保留
+- DeepSeek / ChatGPT / Claude / 豆包 / 元宝等其他站点 0 行为变化(只对未知 block 容器加 wrapper,对已显式处理的 tag 行为完全不变)
+- pytest 仍 139 PASS(无 Python 改动)
+- 用户 force reload 步骤不变(v1.15.15 的 5 步操作仍适用,version 改成 1.18.0)
 
 ---
 

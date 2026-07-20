@@ -1287,14 +1287,38 @@
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
         } else {
+            // v1.19.2+: contenteditable (Quill / Lexical / Slate) 走派发 paste 事件,
+            // 不再走 execCommand('insertText'). 老逻辑问题:
+            //   1. input.innerHTML = '' 清了 DOM, 但 Quill internal Delta state 没清,
+            //      后续 Quill 监听到 DOM 变化会"覆盖回去"→ selection / 内容错乱
+            //   2. execCommand('insertText', false, text) 是 deprecated, 而且把
+            //      multi-line text 当 plain text 插入, \n 被吃 → 元宝 4 行 SUMMARY_PROMPT
+            //      只剩第 1 行
+            // 新逻辑: selectAll 让 paste handler 替换全部内容, 派发 paste 事件让
+            // Quill 自己的 paste handler 处理 (它会把 \n 自动拆 <p>).
+            // 1. 焦点
             input.focus();
-            input.innerHTML = '';
-            if (document.execCommand) {
-                document.execCommand('insertText', false, text);
-            } else {
-                input.innerText = text;
-                input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            // 2. 全选现有内容 (让 paste handler 知道是替换, 不是 append)
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(input);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            // 3. 构造 paste 事件, clipboardData 带 multi-line text
+            const dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            let evt;
+            try {
+                evt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+            } catch (e) {
+                evt = new Event('paste', { bubbles: true, cancelable: true });
             }
+            // 部分浏览器 (Firefox / Safari) SyntheticEvent.clipboardData 是 null,
+            // 用 defineProperty 强制注入
+            if (!evt.clipboardData) {
+                Object.defineProperty(evt, 'clipboardData', { value: dt, configurable: true });
+            }
+            input.dispatchEvent(evt);
         }
     }
 

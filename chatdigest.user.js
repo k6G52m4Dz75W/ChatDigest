@@ -146,46 +146,27 @@
             //     </div>
             //   - 输入框是 <textarea placeholder="发消息...">（**有** textarea，不像 Kimi 用的 contenteditable div）
             //
-            // selector 策略：选 action bar（[data-foundation-type] 稳定）→ 用 getMessageNode hook
-            // 拿它的**直接父**作为 message row。messageToMd clone message row + 移除 isUiChrome
+            // selector 策略：选 action bar（[data-foundation-type] 稳定）→ 用 getMessageNode hook 拿
+            // 它的 2 层祖父（message row）。messageToMd clone message row + 移除 isUiChrome
             // （isUiChrome 加 [data-foundation-type*="action-bar"] 祖先检查后会把整个 action bar 滤掉）
             // → 留下 content → blockToMd 走 markdown 转换。
             //
-            // 真实 DOM (doubao.html 实测, 2026-07-20)：
-            //   action bar 的 parent[+0] = `flex flex-col flex-grow max-w-full min-w-0`
-            //   = message row（含 content + action bar 2 个 children）
-            //   parent[+1] = `flex flex-row justify-end` (w-full outer)
-            //
-            // 之前 bug: getMessageNode(el) 返回 el.parentElement.parentElement (2 层祖)
-            // → 拿到 w-full outer 整个聊天区，messageToMd 拼了所有 message
-            // → getLatestReply 拿最后一条失败（拿到所有 row 拼接）/ extractDescription
-            //   找不到 H1 之后 100 字符 → description 字段缺失 → YAML "看起来缺"
-            //
-            // 改: el.parentElement (1 层) + anchor sanity check (用 [data-target-id] 稳定 attr 兜底，
-            // 万一豆包加 1 层 wrapper 也能正确 walk up 找 message row)
+            // getMessageNode 走 "找最近 ancestor whose 2 层祖是 [data-target-id='message-box-target-id']"
+            // —— 用稳定 anchor 探测 message row, 不硬编码 depth = 2
+            // （豆包 DOM 加 1 层 wrapper 也不会断）。
             assistantSel: '[data-foundation-type="receive-message-action-bar"]',
             userSel: '[data-foundation-type="send-message-action-bar"]',
             titleSel: 'header h1, .title',
             inputSel: 'textarea[placeholder^="发消息"]',
             getMessageNode: (el) => {
-                if (!el) return null;
-                // 1) Fast path: el.parentElement IS the message row (verified doubao DOM 2026-07-20)
-                const row = el.parentElement;
-                if (row && row.closest && row.closest('[data-target-id="message-box-target-id"]')) {
-                    return row;
-                }
-                // 2) Fallback: walk up until we find a div that is a direct child of
-                // [data-target-id="message-box-target-id"] (defensive, in case doubao adds
-                // 1 layer of wrapper in future)
-                const anchor = el.closest && el.closest('[data-target-id="message-box-target-id"]');
-                if (!anchor) return null;
+                if (!el || !el.parentElement) return null;
                 let p = el.parentElement;
-                while (p && p !== anchor) {
-                    if (p.parentElement === anchor &&
-                        p.querySelector('[data-foundation-type$="action-bar"]')) {
-                        return p;
+                while (p) {
+                    const gp = p.parentElement;
+                    if (gp && gp.getAttribute && gp.getAttribute('data-target-id') === 'message-box-target-id') {
+                        return p;  // p is the message row
                     }
-                    p = p.parentElement;
+                    p = gp;
                 }
                 return null;
             },

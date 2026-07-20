@@ -1178,6 +1178,13 @@
         }
         const title = (titleOverride !== undefined) ? titleOverride : resolveTitle(content);
         const full = buildHeader(title, content) + content;
+        // DEBUG-ONLY (yuanbao yaml 头丢失诊断): 一次性 console.log full 前 30 行
+        // 确认 buildHeader 输出是否真在 full 里. 看 console 后即删.
+        if (location.hostname.includes('yuanbao.tencent.com')) {
+            console.log('[ChatDigest DEBUG] downloadMarkdown full (first 30 lines):');
+            console.log(full.split('\n').slice(0, 30).join('\n'));
+            console.log('[ChatDigest DEBUG] full length:', full.length, ', content length:', content.length);
+        }
         const fileName = buildFileName(content, titleOverride);
         const blob = new Blob([full], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);

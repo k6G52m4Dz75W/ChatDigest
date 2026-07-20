@@ -186,10 +186,22 @@
         },
         yuanbao: {
             name: '元宝',
-            assistantSel: '.agent-chat__message--bot .markdown, [data-role="assistant"]',
-            userSel: '[data-role="user"]',
-            titleSel: '.chat-title, header h1',
-            inputSel: 'div[contenteditable="true"], textarea',
+            // v1.19.0 修正 (用户实测 yuanbao.html, 2026-07-20):
+            // 老 stub `.agent-chat__message--bot .markdown, [data-role="assistant"]`
+            // 在 yuanbao 真实 DOM 里 0 命中 —— 实际用稳定的 `data-conv-speaker` 属性
+            // (跟 doubao 的 `data-foundation-type` 同一思路: 不依赖 minified class)
+            // - data-conv-speaker="ai"     → AI 回复 (agent-chat__list__item--ai 整条)
+            // - data-conv-speaker="human"  → 用户提问 (agent-chat__list__item--human 整条)
+            // 输入框是 Quill editor, 不是 textarea: `div.ql-editor[contenteditable="true"]`
+            // (跟 Kimi 一样的 Quill 实现, 但 Kimi 当时是写 inputSel fallback 撞上的)
+            // 没有 getMessageNode hook 需求 —— item 本身 (agent-chat__list__item)
+            // 就是消息 row, 直接当 messageToMd 输入。
+            // 标题 HTML 快照里没出现 (conv 标题在 sidebar/header 折叠状态),
+            // 留通用 `h1, h2` fallback。
+            assistantSel: '[data-conv-speaker="ai"]',
+            userSel: '[data-conv-speaker="human"]',
+            titleSel: 'h1, h2, .chat-title, header h1',
+            inputSel: 'div.ql-editor[contenteditable="true"]',
         },
     };
 
@@ -279,6 +291,14 @@
         // - tooltip-*: 任意 tooltip 变体
         // - iconify: svg 图标 class
         if (/\b(sticky-release(-[a-z-]+)?|table-actions(-[a-z-]+)?|icon-button(-[a-z-]+)?|kimi-tooltip|table-title|tooltip-[a-z-]+|iconify)\b/i.test(cls)) return true;
+        // 元宝 chrome (class 前缀 agent-chat__ / hyc-, 跟 DeepSeek ds- / 豆包 data-foundation 同思路:
+        // 不用 minified class, 用稳定语义化 class + 关键词):
+        // - agent-chat__conv--ai__toolbar: AI 消息工具栏 wrapper (复制/重新生成/点赞/点踩)
+        // - agent-chat__toolbar: 工具栏本体 (内层, 包 toolbar__left/right 子元素)
+        // - agent-chat__list__item__checkbox: 批量选择 checkbox (多选导出用)
+        // - hyc-card-box-process-list: 思考/loading 框 (过程信息, 不是最终回复)
+        // - agent-chat__bubble__prefix: AI 头像
+        if (/\b(agent-chat__(conv--ai__toolbar|toolbar)|agent-chat__list__item__checkbox|hyc-card-box-process-list|agent-chat__bubble__prefix)\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

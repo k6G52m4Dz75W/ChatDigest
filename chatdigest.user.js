@@ -191,6 +191,15 @@
         if (tag === 'button' || tag === 'svg' || tag === 'path' || tag === 'img') return true;
         const cls = (el.className || '').toString();
         if (/\bds-[\w-]*(header|toolbar|action|copy|button|lang|label)[\w-]*\b/i.test(cls)) return true;
+        // Kimi chrome（data-v- scoped CSS 时代，class 是固定名不带 ds- 前缀）：
+        // - sticky-release[-rail/-header]: 表格顶栏 sticky 容器
+        // - table-actions[-content/-icon]: 表格操作区（复制/下载等）
+        // - icon-button: 圆形操作按钮
+        // - kimi-tooltip: 按钮悬浮提示（"复制"/"下载"等）
+        // - table-title: 表格标题（"表格"）
+        // - tooltip-*: 任意 tooltip 变体
+        // - iconify: svg 图标 class
+        if (/\b(sticky-release(-[a-z-]+)?|table-actions(-[a-z-]+)?|icon-button(-[a-z-]+)?|kimi-tooltip|table-title|tooltip-[a-z-]+|iconify)\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

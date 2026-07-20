@@ -1557,6 +1557,7 @@
     /* 自动发送：优先点击「发送」按钮；
        找不到按钮时，在 textarea 上派发 Enter 键（DeepSeek/多数站点是回车即发送，
        Shift+Enter 才是换行，故这里只发纯 Enter）。
+
        v1.17.0+: 加 Kimi / 类 Lexical 站适配 —— Kimi send button 不是 <button>，
        是 <div class="send-button-container"> 含 <svg class="iconify send-icon" name="Send">。
        实际 HTML (用户实测 2026-07-19):
@@ -1564,13 +1565,26 @@
            <svg class="iconify send-icon" name="Send">...</svg>
          </div>
        现有 selector 全部 0 命中, 走 fallback `execCommand('insertParagraph')` —— 不发送,
-       waitAndAutoSave 等 2s 稳定后直接抓最近已有 AI reply 导出. 修法: 加 Kimi 适配. */
+       waitAndAutoSave 等 2s 稳定后直接抓最近已有 AI reply 导出. 修法: 加 Kimi 适配.
+
+       v1.19.1+: 加元宝 (yuanbao.tencent.com) 适配 —— send button 是 <a id="yuanbao-send-btn">,
+       class 是 CSS Module hash 风格 (style__send-btn___RwTm5), 禁用时加 --disabled
+       modifier (style__send-btn--disabled___mhfdQ), 不是用 disabled 属性.
+       <a> 没有原生 disabled 属性, 所以原来 `!b.disabled` 对 <a> 永远 true, 会把禁用的
+       按钮也当成可点 → click 无声失败 → waitAndAutoSave 等到"AI 最后一次回答"
+       (即上次的旧回答) 就保存了, 用户感觉"莫名其妙生成了一个文件".
+       修法: sendSel 列表前加 [id="yuanbao-send-btn"] + 排除 className 含 '--disabled' 的元素.
+
+       contenteditable fallback 也修了: 原来走 `execCommand('insertParagraph')`,
+       Quill/Lexical 等现代编辑器不响应这个. 元宝的 div.ql-editor[contenteditable="true"]
+       有 `enterkeyhint="send"`, 派发真 KeyboardEvent('keydown', { key: 'Enter' })
+       才会触发 Quill 的 onKeyDown handler → 发送. */
     function autoSend(input) {
-        const sendSel = 'button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button, .send-button-container, [name="Send"]';
+        const sendSel = '[id="yuanbao-send-btn"], button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button, .send-button-container, [name="Send"]';
         let btn = null;
         try {
             btn = Array.from(document.querySelectorAll(sendSel))
-                .find(b => b.offsetParent !== null && !b.disabled);
+                .find(b => b.offsetParent !== null && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
         } catch (e) { btn = null; }
 
         if (btn) {
@@ -1579,17 +1593,24 @@
             return;
         }
 
-        if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-            const fire = (type) => input.dispatchEvent(new KeyboardEvent(type, {
+        const fireEnter = (target) => {
+            const fire = (type) => target.dispatchEvent(new KeyboardEvent(type, {
                 key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
                 bubbles: true, cancelable: true
             }));
             fire('keydown'); fire('keypress'); fire('keyup');
+        };
+
+        if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+            fireEnter(input);
             toast(t('toast.autoSentEnter'), 'ok');
         } else {
+            // v1.19.1+: contenteditable (Quill / Lexical / Slate) 走真 Enter 键,
+            // 不再走 execCommand('insertParagraph') —— 现代编辑器不响应.
+            // 元宝的 ql-editor 有 enterkeyhint="send", Quill 监听 keydown 触发发送.
             input.focus();
-            if (document.execCommand) document.execCommand('insertParagraph');
-            toast(t('toast.autoTried'), 'ok');
+            fireEnter(input);
+            toast(t('toast.autoSentEnter'), 'ok');
         }
     }
 

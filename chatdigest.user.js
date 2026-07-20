@@ -361,8 +361,12 @@
         if (tag === 'p') {
             // 注意：inlineToMd 会把 <br> 还原成 \n（行内换行），这里【不能】把 \n 折叠成空格，
             // 否则 <br> 产生的换行会丢失——例如引用块里逐行英文会被挤成一行、Markdown 彻底变形。
+            // 尾部输出 2 个换行（\n\n）而非 1 个：Markdown 段落规范是「以双换行结束」，
+            // 之前 \n 依赖下一 block 的 \n 前缀 + normalizeMd 折叠救场（碰巧对，不规范）。
+            // 同时这是 AI 回复里 `text\n---`（无空行）触发 CommonMark setext h2 的根因——
+            // <p> 内部 inline 拼接 / li 嵌套等场景会塌成 \ntext\n---\n，把段落撞成 h2。
             const t = inlineToMd(el).trim();
-            return t ? '\n' + t + '\n' : '';
+            return t ? '\n' + t + '\n\n' : '';
         }
         // 列表
         if (tag === 'ul' || tag === 'ol') {

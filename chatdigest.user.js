@@ -508,19 +508,6 @@
         return md;
     }
 
-    /* 确保 `---` 行前面有空白行：CommonMark 规范下 `text\n---` 是 setext h2
-       （段落 + `---` 无空行 = h2 标题），`text\n\n---` 才是 paragraph + HR。
-       AI 回复里经常出现「段落 + --- + ## 章节」结构，源 Markdown 如果
-       `---` 紧跟段落无空行，渲染器就把段落当 setext h2，整个开场段
-       看着像"伪标题"。修法：扫描整个 md，凡是非空行紧接 `---`（仅有空白）
-       的，强制在中间插一个空行，让 `---` 变 thematic break 而不是
-       setext underline。已有空行的不动。 */
-    function ensureHrBlankLine(md) {
-        // 匹配「非空行\n---（行尾可有空白）」→ 插入空行。
-        // 用了 `m` flag 让 `^` 匹配每行开头；`[^\n]` 卡住首字符非空（即非空行）。
-        return md.replace(/^([^\n].*)\n(---[ \t]*)$/gm, '$1\n\n$2');
-    }
-
     /* 判断一个消息节点是否为「AI 回复」。DeepSeek 等带 .ds-markdown 标记；
        其余站点回退到站点专属 assistantSel 选择器匹配（容器自身或其内部含 AI 标记）。 */
     function isAssistantNode(node) {
@@ -590,7 +577,6 @@
         let md = (thinking ? thinking + '\n\n' : '') + answer;
         md = balanceFences(normalizeMd(md));   // 先补全可能缺失的闭合围栏（DOM 提取时结尾 ``` 偶会丢失）
         md = unwrapSourceFences(md);            // 再解包「整篇 Markdown/纯文本源码」围栏（plaintext/text/markdown/md/txt），顺序必须在 balanceFences 之后
-        md = ensureHrBlankLine(md);             // 强制 `---` 前有空行（避免 `段落\n---` 被渲染成 setext h2）
         return cleanCitations(md);              // 最后清洗引用角标残迹（DeepSeek 编号引用 [-3](url) / 短横残留）
     }
 

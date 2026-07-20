@@ -467,11 +467,16 @@
             return t ? '\n' + t + '\n\n' : '';
         }
         // 列表
+        // v1.18.1 修复: OL marker 宽度 ("1. "/"10. ") ≥ 3 字符, 之前统一 2 空格缩进
+        // 不够 CommonMark continuation 要求 (indent ≥ 首个 content 的 column) →
+        // 描述 "飘" 出 list item 当独立段落, 跟 strong 合并渲染。
+        // 改: OL 用 3 空格, UL 仍 2 空格 ("- " 是 2 字符)。
         if (tag === 'ul' || tag === 'ol') {
             const items = Array.from(el.children).filter(c => c.tagName.toLowerCase() === 'li');
+            const indent = tag === 'ol' ? '\n   ' : '\n  ';
             const out = items.map((li, i) => {
                 const prefix = tag === 'ol' ? (i + 1) + '. ' : '- ';
-                const body = blockToMd(li).replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n/g, '\n  ');
+                const body = blockToMd(li).replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n/g, indent);
                 return prefix + body;
             }).join('\n');
             return '\n' + out + '\n';

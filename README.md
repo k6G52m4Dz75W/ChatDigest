@@ -37,19 +37,19 @@
 
 | AI site          | URL                     | Status         | One-click export (📑 FAB) | Export all (📚) |
 | ---------------- | ----------------------- | -------------- | ------------------------- | --------------- |
-| DeepSeek         | `chat.deepseek.com`     | ✅ Supported   | ✅                        | ✅              |
-| ChatGPT          | `chatgpt.com`           | ✅ Supported   | ✅                        | ✅              |
-| Kimi             | `www.kimi.com`          | ✅ Supported   | ✅                        | ✅              |
-| Claude           | `claude.ai`             | ✅ Supported   | ✅                        | ✅              |
-| Doubao (豆包)    | `www.doubao.com`        | ✅ Supported   | ✅                        | ✅              |
-| Yuanbao (元宝)   | `yuanbao.tencent.com`   | ✅ Supported   | ✅                        | ✅              |
-| Gemini           | `gemini.google.com`     |                |                           |                 |
-| Tongyi Qianwen   | `tongyi.aliyun.com`     |                |                           |                 |
-| Wenxin Yiyan     | `yiyan.baidu.com`       |                |                           |                 |
-| Zhipu Qingyan    | `chatglm.cn`            |                |                           |                 |
-| Xunfei Spark     | `xinghuo.xfyun.cn`      |                |                           |                 |
-| Perplexity       | `perplexity.ai`         |                |                           |                 |
-| Grok             | `grok.com` / `x.com`    |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> DeepSeek         | `chat.deepseek.com`     | ✅ Supported   | ✅                        | ✅              |
+| <img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> ChatGPT          | `chatgpt.com`           | ✅ Supported   | ✅                        | ✅              |
+| <img src="https://www.google.com/s2/favicons?domain=www.kimi.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Kimi             | `www.kimi.com`          | ✅ Supported   | ✅                        | ✅              |
+| <img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Claude           | `claude.ai`             | ✅ Supported   | ✅                        | ✅              |
+| <img src="https://www.google.com/s2/favicons?domain=www.doubao.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Doubao (豆包)    | `www.doubao.com`        | ✅ Supported   | ✅                        | ✅              |
+| <img src="https://www.google.com/s2/favicons?domain=yuanbao.tencent.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Yuanbao (元宝)   | `yuanbao.tencent.com`   | ✅ Supported   | ✅                        | ✅              |
+| <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Gemini           | `gemini.google.com`     |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=tongyi.aliyun.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Tongyi Qianwen   | `tongyi.aliyun.com`     |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=yiyan.baidu.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Wenxin Yiyan     | `yiyan.baidu.com`       |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=chatglm.cn&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Zhipu Qingyan    | `chatglm.cn`            |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=xinghuo.xfyun.cn&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Xunfei Spark     | `xinghuo.xfyun.cn`      |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=perplexity.ai&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Perplexity       | `perplexity.ai`         |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=grok.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Grok             | `grok.com` / `x.com`    |                |                           |                 |
 
 > "One-click export" = inject summary spell + auto-send + wait for generation + auto-save (single-message path); "Export all" = scroll through virtual list to collect full history (multi-message path). Other entry points (Export latest / Copy latest / Auto-push IMA) use the same path and apply to all sites, so they are not listed separately. Open an issue (with site URL + DOM screenshot preferred) to request a new site, or add an adapter yourself per "Adding a new site" below.
 

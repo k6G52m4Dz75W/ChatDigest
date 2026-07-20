@@ -37,19 +37,19 @@
 
 | AI 站点          | URL                     | 状态      | 一键导出 (📑 FAB) | 导出全部对话 (📚) |
 | ---------------- | ----------------------- | --------- | ----------------- | ----------------- |
-| DeepSeek         | `chat.deepseek.com`     | ✅ 已支持 | ✅                | ✅                |
-| ChatGPT          | `chatgpt.com`           | ✅ 已支持 | ✅                | ✅                |
-| Kimi             | `www.kimi.com`          | ✅ 已支持      | ✅                | ✅                |
-| Claude           | `claude.ai`             | ✅ 已支持 | ✅                | ✅                |
-| 豆包             | `www.doubao.com`        | ✅ 已支持 | ✅                | ✅                |
-| 元宝             | `yuanbao.tencent.com`   | ✅ 已支持 | ✅                | ✅                |
-| Gemini           | `gemini.google.com`     |           |                   |                   |
-| 通义千问         | `tongyi.aliyun.com`     |           |                   |                   |
-| 文心一言         | `yiyan.baidu.com`       |           |                   |                   |
-| 智谱清言         | `chatglm.cn`            |           |                   |                   |
-| 讯飞星火         | `xinghuo.xfyun.cn`      |           |                   |                   |
-| Perplexity       | `perplexity.ai`         |           |                   |                   |
-| Grok             | `grok.com` / `x.com`    |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> DeepSeek         | `chat.deepseek.com`     | ✅ 已支持 | ✅                | ✅                |
+| <img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> ChatGPT          | `chatgpt.com`           | ✅ 已支持 | ✅                | ✅                |
+| <img src="https://www.google.com/s2/favicons?domain=www.kimi.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Kimi             | `www.kimi.com`          | ✅ 已支持      | ✅                | ✅                |
+| <img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Claude           | `claude.ai`             | ✅ 已支持 | ✅                | ✅                |
+| <img src="https://www.google.com/s2/favicons?domain=www.doubao.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 豆包             | `www.doubao.com`        | ✅ 已支持 | ✅                | ✅                |
+| <img src="https://www.google.com/s2/favicons?domain=yuanbao.tencent.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 元宝             | `yuanbao.tencent.com`   | ✅ 已支持 | ✅                | ✅                |
+| <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Gemini           | `gemini.google.com`     |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=tongyi.aliyun.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 通义千问         | `tongyi.aliyun.com`     |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=yiyan.baidu.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 文心一言         | `yiyan.baidu.com`       |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=chatglm.cn&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 智谱清言         | `chatglm.cn`            |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=xinghuo.xfyun.cn&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 讯飞星火         | `xinghuo.xfyun.cn`      |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=perplexity.ai&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Perplexity       | `perplexity.ai`         |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=grok.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Grok             | `grok.com` / `x.com`    |           |                   |                   |
 
 > 「一键导出」= 注入总结咒语 + 自动发送 + 等待生成 + 自动保存（单条消息路径）；「导出全部对话」= 滚动遍历虚拟列表收集全量历史（多消息路径）。其余入口（导出最新 / 复制最新 / 自动推送 IMA）走同一路径、所有站点通用，不再单列。想要支持的站点请发 issue（附站点 URL + 截图 DOM 结构最佳），或参考下文「适配新站点」自行加 adapter。
 

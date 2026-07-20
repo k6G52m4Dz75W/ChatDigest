@@ -302,6 +302,16 @@
         if (isUiChrome(el)) return '';
         const tag = el.tagName.toLowerCase();
 
+        // 子节点路由：inline element 走 inlineToMd 保留格式，block element 走 blockToMd。
+        // 用于 li / blockquote / 未知 block 容器（div/section/article）递归 children 时——
+        // 这些场景 AI 可能把 <strong>/<em>/<code>/<a> 等直接放在容器内，
+        // 之前 blockToMd 对 inline tag 也走"未知 container"路径 fall through 丢格式
+        // （例：<li>item with <code>code</code></li> 之前输出 "item with code"，code 标记丢失）。
+        const INLINE_TAGS = /^(strong|b|em|i|del|s|strike|a|img|br|code|span|u|small|sub|sup|mark)$/;
+        const routeChild = (c) => (c.nodeType === Node.ELEMENT_NODE && INLINE_TAGS.test(c.tagName.toLowerCase()))
+            ? inlineToMd(c)
+            : blockToMd(c);
+
         // 代码块
         if (tag === 'pre') {
             const code = el.querySelector('code') || el;
@@ -379,11 +389,11 @@
             return '\n' + out + '\n';
         }
         if (tag === 'li') {
-            return '\n' + Array.from(el.childNodes).map(blockToMd).join('').trim() + '\n';
+            return '\n' + Array.from(el.childNodes).map(routeChild).join('').trim() + '\n';
         }
         // 引用
         if (tag === 'blockquote') {
-            const inner = Array.from(el.childNodes).map(blockToMd).join('').trim();
+            const inner = Array.from(el.childNodes).map(routeChild).join('').trim();
             return '\n' + inner.split('\n').map(l => '> ' + l).join('\n') + '\n';
         }
         // 表格
@@ -392,8 +402,11 @@
         if (tag === 'hr') return '\n---\n';
         if (tag === 'br') return '\n';
 
-        // 容器：递归子节点
-        return Array.from(el.childNodes).map(blockToMd).join('');
+        // 容器：递归子节点 — 未知 block 容器（div/section/article/aside/main 等）按段落分隔输出。
+        // 之前走 fall through `join('')` 会塌成 inline 文本（多块粘一起，如
+        // <div>A</div><div>B</div> → "AB"），同时塌成 text\n--- 触发 CommonMark setext h2 撞车。
+        // 现在 wrap \n + content + \n\n 让未知 block 容器也符合 Markdown 段落分隔语义。
+        return '\n' + Array.from(el.childNodes).map(routeChild).join('') + '\n\n';
     }
 
     /* 折叠多余空行、去除行尾空白 */

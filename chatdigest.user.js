@@ -395,10 +395,19 @@
         // 这些场景 AI 可能把 <strong>/<em>/<code>/<a> 等直接放在容器内，
         // 之前 blockToMd 对 inline tag 也走"未知 container"路径 fall through 丢格式
         // （例：<li>item with <code>code</code></li> 之前输出 "item with code"，code 标记丢失）。
+        //
+        // v1.18.1 修复: routeChild 跳过纯空白 text node, 避免 `<li>\n  <strong>...` 这类
+        // HTML 缩进产生的 "\n  " text node 变成 "   \n\n   " 那种"空行带尾空格"残留,
+        // 视觉上 "<strong>后面跟一行只有空格再接描述" 看着像 strong 没结束.
         const INLINE_TAGS = /^(strong|b|em|i|del|s|strike|a|img|br|code|span|u|small|sub|sup|mark)$/;
-        const routeChild = (c) => (c.nodeType === Node.ELEMENT_NODE && INLINE_TAGS.test(c.tagName.toLowerCase()))
-            ? inlineToMd(c)
-            : blockToMd(c);
+        const routeChild = (c) => {
+            if (c.nodeType === Node.TEXT_NODE && /^[ \t\n\r]*$/.test(c.textContent)) {
+                return '';  // 跳过纯空白 text node (HTML formatting 产生的)
+            }
+            return (c.nodeType === Node.ELEMENT_NODE && INLINE_TAGS.test(c.tagName.toLowerCase()))
+                ? inlineToMd(c)
+                : blockToMd(c);
+        };
 
         // 代码块
         if (tag === 'pre') {
@@ -502,9 +511,18 @@
         return '\n' + Array.from(el.childNodes).map(routeChild).join('') + '\n\n';
     }
 
-    /* 折叠多余空行、去除行尾空白 */
+    /* 折叠多余空行、去除行尾空白。
+       v1.18.1 修复 (2 处):
+       1. 之前用 `[ \t]+\n` → `\n` 全局吃"行尾空格+换行", 但 list continuation 的 indent
+          (e.g. ul/ol handler 输出 ` 集结...`) 也是这种"空格+换行+空格+文本"模式,
+          会被误吃 → 3 空格缩进变成 0 空格, renderer 识别 description 为 list 外独立段落.
+       2. 改成 `\n[ \t]+\n` 后又掉进新坑: 在 `\n   \n   \n   ` 这种"3 个 \n 各跟 3 空格"
+          里, regex 是 non-overlapping, match 1 结束后从 match 1 结尾继续, 下一段开头
+          是 sp 不是 \n, 第二个 match 永远 miss → "\n   \n   \n   " 只塌一半成
+          "\n\n   \n   ", description 前多出"3sp+\n+3sp" 看着像 strong 没结束.
+          改用 `(\n[ \t]+)+\n` → `\n\n` (1+ 次"\n+sp" 段, 一次性吞), 把整段塌成 2 \n. */
     function normalizeMd(md) {
-        return md.replace(/[ \t]+\n/g, '\n')
+        return md.replace(/(\n[ \t]+)+\n/g, '\n\n')
                  .replace(/\n{3,}/g, '\n\n')
                  .replace(/^\n+/, '')
                  .replace(/\n+$/, '')

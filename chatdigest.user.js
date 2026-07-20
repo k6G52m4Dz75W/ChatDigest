@@ -121,10 +121,68 @@
         },
         doubao: {
             name: '豆包',
-            assistantSel: '[data-testid="message-assistant"] .markdown-body, .bot-message',
-            userSel: '[data-testid="message-user"]',
-            titleSel: '.title, header h1',
-            inputSel: 'div[contenteditable="true"], textarea',
+            // v1.18.1 修正：v1.18.0 的 `[data-testid="..."]` / `.bot-message` / `.markdown-body`
+            // 实际 doubao.html 0 命中（跟 Kimi v1.16.0 stub 同一类问题 —— selector 从假设写、没真测过）。
+            // 用户报告 3 个 bug 全是 selector 失效的级联后果：
+            //   ① 一键发送后等不到 reply 完成 → ② 无法手动停止 → ③ 手动导出最新回复提示"没抓到有效内容"
+            // 根因：assistantSel 选不到节点 → getAssistantMessages() 返回 [] → getLatestReply(null) → 全 fail
+            //
+            // 真实 DOM (doubao.html 实测, 2026-07-20)：
+            //   - 消息 wrapper 用 [data-foundation-type] 标识（**稳定**，不像 minified class 每次 build 变）：
+            //     · send-message-action-bar    = 用户消息的工具栏（"复制/分享/举报"...）
+            //     · receive-message-action-bar = AI 回复的工具栏
+            //     · receive-message-suggest-foundation = AI 回复后的"建议追问"
+            //   - 每个 message row 结构 (e.g. AI reply):
+            //     <div data-target-id="message-box-target-id">  <-- 稳定根
+            //       <div>                                       <-- w-full
+            //         <div class="flex flex-row ...">           <-- message row
+            //           <div class="flex flex-col ...">          <-- content (markdown)
+            //             <div class="container-XXXXX">         <-- minified content 容器
+            //               ...user 文本 / AI markdown...
+            //           </div>
+            //           <div data-foundation-type="receive-message-action-bar">  <-- action bar (chrome)
+            //         </div>
+            //       </div>
+            //     </div>
+            //   - 输入框是 <textarea placeholder="发消息...">（**有** textarea，不像 Kimi 用的 contenteditable div）
+            //
+            // selector 策略：选 action bar（[data-foundation-type] 稳定）→ 用 getMessageNode hook
+            // 拿它的**直接父**作为 message row。messageToMd clone message row + 移除 isUiChrome
+            // （isUiChrome 用两次 closest() OR 检测 action bar 后代 — 避开 `closest('A, B')` 多 selector
+            // 抛 SyntaxError 的 c50458b 崩溃 bug）→ 留下 content → blockToMd 走 markdown 转换。
+            //
+            // getMessageNode 走 "el.parentElement (1 层) + [data-target-id='message-box-target-id'] anchor
+            // sanity check" —— 真实 DOM 中 el.parentElement 就是 message row (verified 2026-07-20
+            // find_doubao6.py output parent[+0] = "flex flex-col flex-grow max-w-full min-w-0" 包含
+            // content + action bar 2 个 children)。c5859ac 之前的 2 层祖版本拿 w-full outer
+            // (parent[+1]) = 整个聊天区 → messageToMd 拼所有 messages → extractDescription 找不到
+            // 正确 H1 → YAML description 脏或缺失。
+            assistantSel: '[data-foundation-type="receive-message-action-bar"]',
+            userSel: '[data-foundation-type="send-message-action-bar"]',
+            titleSel: 'header h1, .title',
+            inputSel: 'textarea[placeholder^="发消息"]',
+            getMessageNode: (el) => {
+                if (!el) return null;
+                // 1) Fast path: el.parentElement IS the message row (verified doubao DOM 2026-07-20)
+                const row = el.parentElement;
+                if (row && row.closest && row.closest('[data-target-id="message-box-target-id"]')) {
+                    return row;
+                }
+                // 2) Fallback: walk up until we find a div that is a direct child of
+                // [data-target-id="message-box-target-id"] (defensive, in case doubao adds
+                // 1 layer of wrapper in future)
+                const anchor = el.closest && el.closest('[data-target-id="message-box-target-id"]');
+                if (!anchor) return null;
+                let p = el.parentElement;
+                while (p && p !== anchor) {
+                    if (p.parentElement === anchor &&
+                        p.querySelector('[data-foundation-type$="action-bar"]')) {
+                        return p;
+                    }
+                    p = p.parentElement;
+                }
+                return null;
+            },
         },
         yuanbao: {
             name: '元宝',
@@ -166,6 +224,12 @@
             nodes = queryAll(f);
             if (nodes.length) break;
         }
+        // 站点可选 hook：把 selector 选到的 node 转换成「消息 row 容器」。
+        // 例：豆包 assistantSel 选 action bar（稳定），getMessageNode(el) → action bar 的直接父
+        // 拿 message row（content + action bar 一起），让 messageToMd clone + 移除 chrome 后输出纯 content。
+        if (SITE.getMessageNode) {
+            nodes = nodes.map(SITE.getMessageNode).filter(Boolean);
+        }
         return nodes;
     }
 
@@ -179,6 +243,9 @@
             nodes = queryAll(f);
             if (nodes.length) break;
         }
+        if (SITE.getMessageNode) {
+            nodes = nodes.map(SITE.getMessageNode).filter(Boolean);
+        }
         return nodes;
     }
 
@@ -191,6 +258,18 @@
         if (tag === 'button' || tag === 'svg' || tag === 'path' || tag === 'img') return true;
         const cls = (el.className || '').toString();
         if (/\bds-[\w-]*(header|toolbar|action|copy|button|lang|label)[\w-]*\b/i.test(cls)) return true;
+        // 豆包 chrome（data-foundation-type 时代，class 全是 minified 无稳定关键字）：
+        // - send-message-action-bar: 用户消息工具栏（复制/分享/举报）
+        // - receive-message-action-bar: AI 回复工具栏（复制/点赞/点踩/重新生成/语音）
+        // - receive-message-suggest-foundation: AI 回复后"建议追问"
+        // 整条 action bar + 内部 button 全部是 chrome —— ancestor 检查最稳（minified class 不可靠）。
+        // ⚠️ 不能用 `el.closest('A, B')` 多 selector —— Element.closest() spec 规定只接
+        //    1 个 selector, 传逗号分隔会抛 DOMException SyntaxError 炸 IIFE。
+        //    必须拆成两次 closest() OR 起来。
+        if (el.closest && (
+            el.closest('[data-foundation-type$="action-bar"]') ||
+            el.closest('[data-foundation-type$="suggest-foundation"]')
+        )) return true;
         // Kimi chrome（data-v- scoped CSS 时代，class 是固定名不带 ds- 前缀）：
         // - sticky-release[-rail/-header]: 表格顶栏 sticky 容器
         // - table-actions[-content/-icon]: 表格操作区（复制/下载等）
@@ -542,7 +621,16 @@
         if (SITE) {
             const frags = SITE.assistantSel.split(',').map(s => s.trim());
             for (const f of frags) {
-                try { if (node.matches(f)) return true; } catch (e) {}
+                try {
+                    // 豆包场景：getAssistantMessages 已经把 action bar 转成 message row，
+                    // node.matches(assistantSel) 永远 false（row ≠ action bar）。
+                    // 改成查 row 内部是否含 AI action bar。
+                    if (SITE.getMessageNode) {
+                        if (node.querySelector(f)) return true;
+                    } else if (node.matches(f)) {
+                        return true;
+                    }
+                } catch (e) {}
             }
         }
         return false;

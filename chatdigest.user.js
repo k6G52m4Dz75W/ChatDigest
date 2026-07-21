@@ -342,7 +342,16 @@
         // - answer-meta: AI 答案 metadata wrapper (含 "07月20日 23:11" 时间戳等, 不是内容)
         // - assistant-text: "AI 助手" 角色标签 (元数据, 不是正文)
         // - chat-question-wrap: user 提问 wrapper 内层 (chat-question-card-wrap 是外层, 留 wrapper 整条)
-        if (/\b(chat-msg-bottom-anchor|answer-meta|assistant-text|chat-question-wrap)\b/i.test(cls)) return true;
+        // v1.21.0 增: 表格 chrome (user 报告 case, 千问 qk-md-* 风格稳定无 hash, 跟 qk-md-text 同款)
+        // - qk-md-table-action[-title/-bar]: 表格 action bar wrapper (含"表格"标题 + 操作按钮区)
+        // - qk-md-table-download-[wrapper/icon/menu/menu-item]: 下载按钮 + 菜单 (内含"下载为表格"/"导出为图片" 文字)
+        // - qk-md-download-icon: 下载 svg icon
+        // - qk-md-copy-icon: 复制 svg icon
+        // **不能 strip 的** (跟 chrome 同前缀但语义是内容):
+        //   - qk-md-table / -head / -body / -row: 真实 table 结构
+        //   - qk-md-table-section / -wrapper / -container: table 容器 (table 在 -container 内)
+        //   - qk-md-text / -paragraph / -ul / -ol / -li / -strong / -code: 实际正文
+        if (/\b(chat-msg-bottom-anchor|answer-meta|assistant-text|chat-question-wrap|qk-md-(table-action(-title|-bar)?|table-download-(wrapper|icon|menu|menu-item)|download-icon|copy-icon))\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

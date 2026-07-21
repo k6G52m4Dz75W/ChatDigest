@@ -24,6 +24,25 @@
 (function () {
     'use strict';
 
+    /* v1.20.0 新增: SCRIPT_VERSION 提取 + CHATDIGEST_TAG 拼装, 用于 report-bug 路径
+       (GM menu "report bug" + alert 弹窗文本 + v1.15.15 FATAL 终极保险 alert/console)
+       注入版本号 —— user 复制 alert 文本 / dev 看 console log 都能立刻知道是哪个版本触发的。
+       提取策略:
+         1) 优先 GM_info.script.version (Tampermonkey 注入, 反映**实际运行**版本,
+            跟 @version 头可能因 cache 略不同 —— 比如 @namespace 改了 Tampermonkey 当新脚本)
+         2) 兜底硬编码 '1.20.0' (跟 @version 头对齐, 万一 GM_info 不可用时退而求其次)
+         3) 兜底再兜底 'unknown' (终极保险, 至少 SCRIPT_VERSION 是 string, 不会 throw)
+       daily-use 的 console.log / toast 提示不加版本号 (会啰嗦), 只有 report-bug 路径加. */
+    let SCRIPT_VERSION = 'unknown';
+    try {
+        if (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) {
+            SCRIPT_VERSION = GM_info.script.version;
+        } else {
+            SCRIPT_VERSION = '1.20.0';
+        }
+    } catch (_) { SCRIPT_VERSION = '1.20.0'; }
+    const CHATDIGEST_TAG = 'ChatDigest: ' + SCRIPT_VERSION;
+
     /* ============================================================
      * v1.15.15 终极保险：IIFE 顶部先注册一个"report bug"菜单项（不依赖 t()/MSGS），
      * 然后整个主流程包 try/catch。任何 module-level throw 都被 catch 住 + alert 显示
@@ -45,8 +64,10 @@
     // ① 顶部立刻注册一个"report bug"菜单 (不依赖 t()/MSGS/SITE/PUSH_STORAGE)
     if (typeof GM_registerMenuCommand === 'function') {
         try {
-            GM_registerMenuCommand('ChatDigest: report bug (open F12 console)', function () {
-                try { alert('ChatDigest: please open F12 console, copy any [ChatDigest FATAL] line, paste to developer.'); } catch (_) {}
+            // v1.20.0: 菜单 label 带版本号 (CHATDIGEST_TAG = "ChatDigest: 1.20.0"),
+            // 跟 alert 弹窗 + console error 用同一个 tag, dev 一眼锁定版本
+            GM_registerMenuCommand(CHATDIGEST_TAG + ' - report bug (open F12 console)', function () {
+                try { alert(CHATDIGEST_TAG + ' - please open F12 console, copy any [ChatDigest FATAL] line, paste to developer.'); } catch (_) {}
             });
         } catch (_) { /* 极端情况:连 GM_registerMenuCommand 都不可用 — 跳过 */ }
     }
@@ -1492,7 +1513,7 @@
         try {
             return t('summaryPrompt');
         } catch (e) {
-            console.error('[ChatDigest] SUMMARY_PROMPT t() 失败,使用 fallback 硬编码:', e);
+            console.error('[' + CHATDIGEST_TAG + '] SUMMARY_PROMPT t() 失败,使用 fallback 硬编码:', e);
             return '请将我们刚才的全部对话,整理成一篇适合存入知识库的 Markdown 文章。要求:\n1. 提炼核心结论;2. 按层级标题重组;3. 真正的代码片段才用带语言标识的代码块(如 ```python);4. 直接用标准 Markdown 格式输出(# 标题、表格、列表、加粗等正常渲染即可),不要把整篇文章再包进一个代码块里,也不要加开场白和结束语;5. 直接返回纯文本,不要打开或调用任何文档工具(豆包自带的 .docx / 文章视图等),内容直接打在聊天消息里。';
         }
     })();
@@ -1907,10 +1928,12 @@
     } catch (e) {
         try {
             // 用 hardcoded 文案 (不依赖 t() 翻译), 用户能直接看到具体错误
-            var msg = '[ChatDigest] FATAL init failed: ' + (e && e.message ? e.message : String(e)) +
+            // v1.20.0: alert / console 加 CHATDIGEST_TAG (e.g. "ChatDigest: 1.20.0"),
+            // user 复制 alert 文本 / dev 看 console log 立刻知道是哪个版本触发的 bug
+            var msg = '[' + CHATDIGEST_TAG + '] FATAL init failed: ' + (e && e.message ? e.message : String(e)) +
                       '\n\nStack: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join('\n') : 'N/A') +
                       '\n\nPlease copy this alert text and report to developer.';
-            try { console.error('[ChatDigest FATAL]', e); } catch (_) {}
+            try { console.error('[' + CHATDIGEST_TAG + ' FATAL]', e); } catch (_) {}
             try { alert(msg); } catch (_) { /* alert 不存在 (e.g. GM sandbox) — fallback console */ }
         } catch (_) { /* 终极保险的终极保险: 不让 catch 自身 throw */ }
     }

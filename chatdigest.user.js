@@ -1176,7 +1176,14 @@
        若正文已含 h1 则不再补 # 标题，避免文件内出现两个一级标题。 */
     function buildHeader(title, content) {
         const fm = buildYamlFrontmatter(title, content, SITE ? SITE.name : '');
-        // 正文已含 h1 时不再补文件级标题，避免文件内出现两个一级标题
+        // DEBUG-ONLY (yuanbao yaml 头丢失诊断 3, 2026-07-21): user 报"还是没 yaml 头",
+        // 上一轮 7027e8e log 显示 full 有 yaml 头, 但 user 跑完新代码 (a08a709) 后
+        // 仍报"没 yaml 头". 可能性: (a) buildHeader 在某条件下返回空/异常, (b) user
+        // 看的不是这次 download 的文件, (c) editor 隐藏. 这次直接在 buildHeader
+        // 内部 + downloadMarkdown 加 log + try/catch, 任何异常都暴露.
+        if (location.hostname.includes('yuanbao.tencent.com')) {
+            console.log('[ChatDigest DEBUG buildHeader] called, title=' + JSON.stringify(title) + ', content.length=' + (content||'').length + ', fm.length=' + fm.length + ', fm.startsWith---=' + fm.startsWith('---'));
+        }
         const hasH1 = /(^|\n)#\s+/.test(content || '');
         if (hasH1) return fm;
         return fm + `# ${title || 'AI 对话知识库'}\n\n`;
@@ -1188,7 +1195,21 @@
             return false;
         }
         const title = (titleOverride !== undefined) ? titleOverride : resolveTitle(content);
-        const full = buildHeader(title, content) + content;
+        let full;
+        try {
+            full = buildHeader(title, content) + content;
+        } catch (e) {
+            // DEBUG-ONLY (yuanbao yaml 头丢失诊断 3): 暴露 buildHeader 异常,
+            // 不然异常会让 full = undefined + content, 然后 Blob 写出"undefined# 标题..."
+            console.error('[ChatDigest DEBUG downloadMarkdown] buildHeader THREW:', e);
+            full = content;  // fallback: 只输出 content (yaml 头确实没, 但至少不污染)
+        }
+        // DEBUG-ONLY (yuanbao yaml 头丢失诊断 3): 显式印 full 实际内容
+        if (location.hostname.includes('yuanbao.tencent.com')) {
+            console.log('[ChatDigest DEBUG downloadMarkdown] full.length=' + full.length + ', starts with ---=' + full.startsWith('---'));
+            console.log('[ChatDigest DEBUG downloadMarkdown] full first 12 lines:\n' + full.split('\n').slice(0, 12).join('\n'));
+            try { localStorage.setItem('chatdigest-debug-full', full); } catch (e) {}
+        }
         const fileName = buildFileName(content, titleOverride);
         const blob = new Blob([full], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);

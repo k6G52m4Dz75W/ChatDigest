@@ -351,7 +351,11 @@
         //   - qk-md-table / -head / -body / -row: 真实 table 结构
         //   - qk-md-table-section / -wrapper / -container: table 容器 (table 在 -container 内)
         //   - qk-md-text / -paragraph / -ul / -ol / -li / -strong / -code: 实际正文
-        if (/\b(chat-msg-bottom-anchor|answer-meta|assistant-text|chat-question-wrap|qk-md-(table-action(-title|-bar)?|table-download-(wrapper|icon|menu|menu-item)|download-icon|copy-icon))\b/i.test(cls)) return true;
+        // v1.21.0 增: 卡片预览 chrome (user 报告 case, 千问 CSS Module hash 风格, 跟 message-card-j_n6rq 同款)
+        // - card-container-wide-*: AI 偶尔插入的"外部引用卡片预览" (含 svg 缩略图 + title + "创建于 xx:xx" 描述)
+        //   整块是 link 引用, 不是 AI 写的回复内容, 必须 strip. 通配 [\\w-]+ 兼容 wide/narrow/mobile 等变种.
+        //   qwen.html 实测 0 hit (新对话才出现), 不跟 chat-answers-card-wrap / message-card-j_n6rq 冲突 (前缀不同).
+        if (/\b(chat-msg-bottom-anchor|answer-meta|assistant-text|chat-question-wrap|qk-md-(table-action(-title|-bar)?|table-download-(wrapper|icon|menu|menu-item)|download-icon|copy-icon)|card-container-[\w-]+)\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

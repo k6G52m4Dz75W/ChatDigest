@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatDigest / 聊摘 — AI 对话一键整理为 Markdown 知识库
 // @namespace    https://github.com/chatdigest
-// @version      1.19.0
+// @version      1.19.1
 // @description  ChatDigest / 聊摘 — 一键把 AI 对话整理成 Markdown 知识库文章。完全本地 / 无订阅 / 无需 API key / 多站点 (DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝) / 隐私优先 / 玻璃拟态 UI。可选推送到 IMA、Obsidian 等任意 Markdown 友好工具。locale-aware 文件名 (zh = 聊摘, 其他 = ChatDigest)。变更历史见 CHANGELOG.md。
 // @author       ChatDigest Contributors
 // @match        *://chat.deepseek.com/*
@@ -1177,7 +1177,18 @@
             return false;
         }
         const title = (titleOverride !== undefined) ? titleOverride : resolveTitle(content);
-        const full = buildHeader(title, content) + content;
+        // v1.19.1 保险: buildHeader 抛了时弹 alert 让 user 知道 + 不静默写残文件
+        // (cf952e2 的 fallback full = content 是反例, 把 yaml 头吃光)
+        let full;
+        try {
+            full = buildHeader(title, content) + content;
+        } catch (e) {
+            // 不 fallback 写 content, 直接 alert 报给 user 看, 不写文件
+            console.error('[ChatDigest] buildHeader THREW:', e, 'content.length:', content.length);
+            alert('[ChatDigest] YAML 头生成失败: ' + e.message + '\n请 F12 Console 看详细错误并报告给开发者。\n本次下载取消。');
+            toast(t('toast.noContentDownload'), 'error');
+            return false;
+        }
         const fileName = buildFileName(content, titleOverride);
         const blob = new Blob([full], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);

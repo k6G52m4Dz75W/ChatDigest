@@ -1685,7 +1685,16 @@
                 const md = getLatestReply({ includeThinking: false });
                 const ok = downloadMarkdown(md);
                 if (ok && AUTO_PUSH_IMA) {
-                    pushToIma(md, buildFileName(md));
+                    // v1.20.0 修：push 跟 download 用同一份 full（含 yaml 头），
+                    // 避免 IMA 推送落盘（ima_watcher.ingest_content 写到 watch_dir，
+                    // 默认 %USERPROFILE%\Downloads，跟浏览器下载同目录）那一份缺失
+                    // frontmatter —— 之前 pushToIma(md, ...) 直接传裸 md，ima_watcher
+                    // 落盘 file 没 yaml 头，跟浏览器下载的"有 yaml 头 file"共存同目录，
+                    // 用户在 Downloads 打开看到的是没 yaml 头那份（IMA 推送的），
+                    // 误以为 downloadMarkdown 漏了 frontmatter。
+                    const title = resolveTitle(md);
+                    const full = buildHeader(title, md) + md;
+                    pushToIma(full, buildFileName(md));
                 }
                 return;
             }

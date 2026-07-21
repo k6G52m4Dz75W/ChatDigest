@@ -2,7 +2,53 @@
 
 
 
-**Latest: v1.19.0（脚本） / v1.2.8（Python 工具链） / 2026-07-20** — **豆包 (doubao.com) 真正支持 + OL list continuation indent 修复**:
+**Latest: v1.20.0（脚本） / v1.2.8（Python 工具链） / 2026-07-21** — **Yuanbao (yuanbao.tencent.com) production-ready: IMA push yaml 头 + list 双 marker strip + SUMMARY_PROMPT 防文档工具逃逸**:
+
+## v1.20.0：Yuanbao (yuanbao.tencent.com) production-ready: IMA push yaml 头 + list 双 marker strip + SUMMARY_PROMPT 防文档工具逃逸 (2026-07-21)
+
+yuanbao ADAPTERS 早在 `afadcc2` (v1.19.0 阶段 commit) 就已经加上 (DOM selector / chrome filter 4 selector 校准 + send button `[id="yuanbao-send-btn"]` + contenteditable paste event 修多行注入),但 v1.19.0 发版时 yuanbao 实际还留 3 个真 bug,只有 chatdigest 自身下载那份 file 不受影响、IMA push 落盘那一份 + list 渲染 + AI prompt 行为都偏离预期。v1.20.0 3 commit cascade 修完, yuanbao 真正 production-ready:
+
+1. **`3d2fc8b` FAB 一键导出 IMA push 跟 download 用同一份 full (含 yaml 头)**:
+   - 症状: `AUTO_PUSH_IMA` 开启时, `waitAndAutoSave` 完成时 `pushToIma(md, buildFileName(md))` 直接传裸 `md`, 跟 `downloadMarkdown` 内部算的 `full = buildHeader(...) + md` (带 yaml 头) 不一致。`ima_watcher.ingest_content(content, filename, watch_dir, kb_id)` 收到后 `f.write(content)` 落盘到 `watch_dir` (默认 `%USERPROFILE%\Downloads`, 跟浏览器下载同目录)。结果 Downloads 文件夹出现 2 个几乎同名的 .md: 浏览器下载的有 yaml 头 / IMA push 落盘的无 yaml 头。
+   - 用户反馈: 2026-07-21 用户在 yuanbao 看到 Downloads 里没 yaml 头那份 (其实 IMA push 落盘的), 误以为 `downloadMarkdown` 漏了 frontmatter。其实 `downloadMarkdown` 一直是对的 (用户 `导出最新回复` / `导出全部对话` 都能正常出 yaml 头), 是 push 路径漏一步 `buildHeader`。
+   - 修法: `waitAndAutoSave` 完成时 `pushToIma(full, buildFileName(md))` 用同一份 `full` (含 yaml 头)。`buildHeader` / `buildYamlFrontmatter` / `downloadMarkdown` / `buildFileName` / `resolveTitle` 主体逻辑 0 改动, 1 处增 3 行。
+   - 镜像测试: `verify_yuanbao_push.py` 验证 buildHeader / buildYamlFrontmatter / buildFileName / resolveTitle 纯函数, 新 push 跟 download 内部字面 100% 一致。
+
+2. **`c1231df` yuanbao list 渲染双 marker — strip body 开头 AI 自带的 list marker**:
+   - 症状: yuanbao 把 AI 写的 markdown 风格 list 文本 ("1. xxx" / "• xxx") 渲染为 `<ol><li>1. xxx</li></ol>` (跟 `<ul><li>• xxx</li></ul>` 同), `blockToMd` 处理 `<ol>/<ul>` 时给每个 `<li>` 加 prefix ("1. " / "- "), body 开头又已经带 "1. " / "• " marker, 拼起来成双 marker:
+     ```
+     1. 1.**能力边界固化**: ...
+     2. 2.**指令高度稳定**: ...
+     - •首行直接以一级标题进入主题
+     ```
+   - 根因: 之前一直误判为 "list 嵌套 quirk", 实际是 yuanbao 渲染机制特有: yuanbao 把 markdown 风格 list 文本内嵌为 `<ol><li>` 的 children 文本, 不是从结构生成。DeepSeek / Kimi / 豆包用真实 `<ol><li>` 渲染 (body 不带 marker), 所以好。
+   - 修法: 处理 `<ol>/<ul>` 时, strip body 开头 AI 自带的 list marker, 跟外层 prefix 只留一份:
+     - `ol`: `/^\s*\d+[.)]\s*/` (匹配 "1. " / "1) " / "1." / "1)", 允许 0+ 空格)
+     - `ul`: `/^\s*[-*+•·]\s*/` (匹配 "- " / "* " / "+ " / "• " / "· ", 允许 0+ 空格)
+   - 镜像测试: `verify_list_dedup.py` 9 case (yuanbao 1./2)/3./•/-、DeepSeek-style body 无 marker 不动、开头空白、数字段中间) 全过。其他站 (DeepSeek / Kimi / 豆包) body 不带 marker, strip 不命中, 0 行为变化。
+
+3. **`ae1d2fa` SUMMARY_PROMPT 加防文档工具逃逸 (zh + en + fallback 全同步)**:
+   - 症状: 豆包 (doubao) 等站 AI 在收到 "整理对话成 Markdown" 指令时, 有时自作主张调用站内自带的 .docx / 文章视图工具 (例: 豆包的"打开文档"按钮), 把生成的内容写到文档里而不是聊天消息里。结果: `waitAndAutoSave` 抓取的"最新回复" 是空 / 残片, 导出的 .md 文件内容缺失或空白, 用户不得不手动去文档工具复制。
+   - 根因: SUMMARY_PROMPT (zh / en MSGS 里的 `'summaryPrompt'` key) 原本只约束"不要包代码块 / 不要开场白结束语", 没明确禁止调用文档工具, AI 遇到模糊场景时按平台默认行为走, 选错了输出通道。
+   - 修法: 在 SUMMARY_PROMPT 第 4 条之后加第 5 条明确禁止:
+     - zh: `\n5. 直接返回纯文本，不要打开或调用任何文档工具（豆包自带的 .docx / 文章视图等），内容直接打在聊天消息里。`
+     - en: `\n5. Return plain text directly in the chat message; do not open or invoke any document tools (e.g. site-built-in .docx / article views).`
+   - 3 处同步改, 保证正常路径 / 兜底路径行为一致: `chatdigest.user.js:1404` (zh MSGS) / `:1444` (en MSGS) / `:1496` (SUMMARY_PROMPT fallback 硬编码, v1.15.14 加的兜底)。zh / en 文案风格跟各自原文一致 (全角 vs ASCII 标点), fallback ASCII 标点 (跟历史 fallback 风格一致)。
+   - 镜像测试: `verify_summary_prompt.py` 验证 t('summaryPrompt') 在 zh / en locale 下都拿到新 prompt, fallback 路径 (return 硬编码) 也带第 5 条, 3 处全部对齐。
+
+`Semver`: **1.19.0 → 1.20.0 minor**:
+- 3 个 fix 都是 bug fix, 严格说 patch, 但合起来把 yuanbao 从 "勉强能用" 升级到 "真正 production-ready" (跟 v1.18.0 "Kimi 输出 production-ready" 同级), 按用户 "攒一起发" 规则走 minor
+- 没有新可见能力 (3 fix 都是现有 path 的 bug 修, 没有新增 entry point)
+- `IMATOOLS_VERSION` 不动 (1.2.8 仍最新, 这次全是 userscript 端逻辑, Python 工具链 0 改动)
+
+`@version` 1.19.0 → 1.20.0。
+
+**所有站点** (DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝) 0 回归:
+- 3d2fc8b: push 跟 download 现在都带 yaml 头, 其他站 IMA push 行为更一致 (以前 push 不带 yaml 头是个隐藏 bug, 现在统一了)
+- c1231df: DeepSeek / Kimi / 豆包 body 不带 marker, strip 不命中, 0 行为变化
+- ae1d2fa: SUMMARY_PROMPT 只追加 1 段说明, 不改现有 4 条, 也不改 injectSummaryPrompt / autoSend / waitAndAutoSave, AI 只是多一条行为约束
+
+Last 3 个脚本版本：v1.20.0（2026-07-21, Yuanbao production-ready: 3 fix cascade 修 IMA push yaml 头 + list 双 marker strip + SUMMARY_PROMPT 防文档工具逃逸, semver minor）/ v1.19.0（2026-07-20, 豆包真正支持 + OL list continuation indent 修复, semver minor）/ v1.18.0（2026-07-20, Kimi 输出 production-ready：3 fix 链根治 setext h2 + 多块塌缩 + inline 丢失 + Kimi chrome 污染, semver minor）。
 
 ## v1.19.0：豆包 (doubao.com) 真正支持 + OL list continuation indent 修复 (2026-07-20)
 

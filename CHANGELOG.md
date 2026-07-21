@@ -2,7 +2,66 @@
 
 
 
-**Latest: v1.20.0（脚本） / v1.2.8（Python 工具链） / 2026-07-21** — **Yuanbao (yuanbao.tencent.com) production-ready: IMA push yaml 头 + list 双 marker strip + SUMMARY_PROMPT 防文档工具逃逸**:
+**Latest: v1.20.1（脚本） / v1.2.8（Python 工具链） / 2026-07-21** — **report-bug 路径注入 @version + 菜单顺序调整 + SCRIPT_VERSION 兜底去 hardcode**:
+
+## v1.20.1：report-bug 路径注入 @version + 菜单顺序调整 + SCRIPT_VERSION 兜底去 hardcode (2026-07-21)
+
+v1.20.0 release 后, user 实测过程中提的 3 个跟"报告 bug 链路"相关的体验 / 鲁棒性改进, 3 commit cascade 修完 (按时间序):
+
+1. **`aafc1f8` report-bug 路径注入 @version — user 复制 alert / dev 看 console 一眼锁定版本**:
+   - 症状: v1.15.15 加的"report bug"菜单 + 终极保险 FATAL alert 文案硬编码 "ChatDigest" (无版本号)。user 复制 alert 文本报告 bug 时, dev 不知道是哪个版本触发的 —— 必须追问"你装的是 v1.19.0 还是 v1.19.1 还是某个 hack commit", 浪费 1 轮对话。同样 v1.15.13/14 时期 cache-busting hack commit 留的"半新半旧"版本, @version 头跟实际运行代码可能略不同, dev 看到 console log 也很难精确定位是哪个 commit。
+   - 修法: 在 IIFE 顶部提取 SCRIPT_VERSION (优先 `GM_info.script.version` 反映**实际运行**版本, 兜底硬编码 '1.20.0' 跟 @version 头对齐, 终极保险 'unknown'), 拼成 `CHATDIGEST_TAG = 'ChatDigest: <version>'`, 然后 5 处 report-bug 路径用同一个 tag 注入版本号:
+     - (1) `GM_registerMenuCommand` 菜单 label
+     - (2) 菜单点击后的 alert 弹窗
+     - (3) v1.15.15 终极保险 FATAL alert msg (IIFE 顶层 catch)
+     - (4) v1.15.15 FATAL console.error
+     - (5) SUMMARY_PROMPT t() 失败 fallback console.error
+   - daily-use 的 i18n MSGS (console.exportAllFailed / console.inputNotFound / console.initFailed / alert.initFailed / console.started 等) 故意**不动**: 这些是用户日常使用看到的 console.log / alert / toast 提示, 每天可能弹几十次, 加版本号会啰嗦。report-bug 路径是低频 (用户遇到 bug 才会触发), 加版本号对 dev 排查价值高。
+
+2. **`fa6d7b1` SCRIPT_VERSION 兜底不再 hardcode '1.20.0' — 真不可用就 'unknown'**:
+   - user 反馈: aafc1f8 用了 3 层 fallback (GM_info → 硬编码 '1.20.0' → 'unknown'), 硬编码 '1.20.0' 是错的: 下个版本 bump 完, 忘改这里就回 '1.20.0' 跟实际运行代码不一致 —— dev 看到 alert 报 "ChatDigest: 1.20.0" 但实际跑的是 v1.20.1 / v1.21.0 新代码, 排查时按错版本号查 CHANGELOG 浪费 1 轮。
+   - @version 头也是 hardcode, 不能用 1.20.0 当兜底源头 (跟 .user.js 头里的 @version 永远同步, 兜底就退化成 "恒等于 @version 头", 失去 dynamic 意义)。
+   - 修法: 简化为 2 层: (1) `GM_info.script.version` (Tampermonkey 注入, 反映实际运行版本); (2) 兜底 `'unknown'` (不再 hardcode 任何数字)。报 `'unknown'` 时 dev 一眼看出 "用户那边 GM_info 异常 / 沙盒不可用", 该追问环境信息 (浏览器 / Tampermonkey 版本 / @grant 设置) —— 比错信错版本号要稳。
+
+3. **`8efcb97` report bug 菜单移到 IMA 推送开关下方**:
+   - user 偏好: Tampermonkey 菜单里 report bug 应该排在 IMA 推送开关**下方**, 而不是 v1.15.15 双保险设计的"IIFE 顶部先注册"位置 (那条会导致菜单 UI 顺序变成 report bug 在 IMA 推送开关**之前**)。
+   - 原 v1.15.15 设计: 顶部立刻注册一个 hardcoded label 的 report bug 菜单项, 即使后续 throw 也保留 (跟 IIFE 顶层 catch 弹 FATAL alert 形成双保险)。代价: menu UI 顺序里 report bug 永远在 IMA 推送开关之前。
+   - 修法: 把 report bug 注册抽成函数 `registerReportBugMenu()`, 移到 `waitBody` 里 `initUI` 之后调 (跟 `registerPushMenu` 同一注册路径), 菜单 UI 自然落到 IMA 推送开关下方。同时拆 `initUI` 的 try/catch 边界:
+     ```js
+     (function waitBody() {
+         if (document.body) {
+             try {
+                 initUI();
+             } catch (err) {
+                 console.error(t('console.initFailed'), err);
+                 alert(t('alert.initFailed') + ' ' + err.message + '\n' + t('alert.initFailed.detail'));
+             }
+             // 无论 initUI 成功还是 throw, 都注册菜单 —— 顺序: IMA 推送开关 → report bug
+             registerPushMenu();
+             registerReportBugMenu();
+             return;
+         }
+         setTimeout(waitBody, 100);
+     })();
+     ```
+   - 行为保证:
+     - `initUI` 自身 throw → `waitBody` catch 抓住 + alert 弹 → 仍调 `registerPushMenu + registerReportBugMenu` → 菜单 UI 完整 (IMA 推送 → report bug 都在)
+     - `initUI` 成功 → 正常注册两个菜单 → 同上顺序
+   - 代价 (设计 trade-off): line 74-1912 之间 throw 时, 菜单里没 report bug。但这段全是 const/let 定义 + function 声明 (v1.15.13 已修 MSGS TDZ), 理论上不该 throw; 极端情况由 IIFE 顶层 catch 弹 FATAL alert 兜底 (CHATDIGEST_TAG 带版本号, user 复制 alert 文本照样能报告)。v1.15.15 双保险"菜单也保留"维度丢一边, 但 IIFE 顶层 catch 兜底保留。
+
+`Semver`: **1.20.0 → 1.20.1 patch**:
+- 3 commit 都是 debug 文案增强 + 菜单 UI 顺序调整, 没改 chat 端到端逻辑, 不算新可见能力
+- 严格说 patch (跟 v1.20.0 minor 的 3 fix 性质不同: 那些改 chat 端到端, 这次改 report-bug 链路)
+- `IMATOOLS_VERSION` 不动 (1.2.8 仍最新, 这次全是 userscript 端, Python 工具链 0 改动)
+
+`@version` 1.20.0 → 1.20.1。
+
+**所有站点** (DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝) 0 回归:
+- aafc1f8: 加 `CHATDIGEST_TAG` 拼装, 5 处 report-bug 路径用 tag, daily-use MSGS 保持原状
+- fa6d7b1: SCRIPT_VERSION 兜底从硬编码 '1.20.0' 改成 'unknown', 行为等价或更安全
+- 8efcb97: `registerReportBugMenu()` 抽函数 + `waitBody` 拆 try/catch 边界, `initUI` + `registerPushMenu` 行为完全不变, FAB 显示逻辑 0 改动
+
+Last 3 个脚本版本：v1.20.1（2026-07-21, report-bug 路径 @version 注入 + 菜单顺序调整 + SCRIPT_VERSION 兜底去 hardcode, semver patch）/ v1.20.0（2026-07-21, Yuanbao production-ready：3 fix cascade 修 IMA push yaml 头 + list 双 marker strip + SUMMARY_PROMPT 防文档工具逃逸, semver minor）/ v1.19.0（2026-07-20, 豆包真正支持 + OL list continuation indent 修复, semver minor）。
 
 ## v1.20.0：Yuanbao (yuanbao.tencent.com) production-ready: IMA push yaml 头 + list 双 marker strip + SUMMARY_PROMPT 防文档工具逃逸 (2026-07-21)
 

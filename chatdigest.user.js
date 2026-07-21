@@ -503,9 +503,19 @@
         if (tag === 'ul' || tag === 'ol') {
             const items = Array.from(el.children).filter(c => c.tagName.toLowerCase() === 'li');
             const indent = tag === 'ol' ? '\n   ' : '\n  ';
+            // v1.20.0 修：yuanbao 把 AI 写的 markdown list 文本 ("1. xxx" / "• xxx")
+            // 渲染为 <ol><li>1. xxx</li></ol> —— body 开头已经带 "1. " / "• " marker,
+            // 跟外层 prefix 拼成双 marker ("1. 1. xxx" / "- • xxx")。
+            // strip body 开头 AI 自带的 list marker, 跟外层 prefix 只留一份。
+            // 其他站 (DeepSeek / Kimi / 豆包) 用真实 <ol><li> 渲染, body 不带 marker,
+            // 这条 replace 不命中, 行为 0 变化。
+            const stripLead = tag === 'ol'
+                ? /^\s*\d+[.)]\s*/
+                : /^\s*[-*+•·]\s*/;
             const out = items.map((li, i) => {
                 const prefix = tag === 'ol' ? (i + 1) + '. ' : '- ';
-                const body = blockToMd(li).replace(/^\n+/, '').replace(/\n+$/, '').replace(/\n/g, indent);
+                let body = blockToMd(li).replace(/^\n+/, '').replace(/\n+$/, '');
+                body = body.replace(stripLead, '').replace(/\n/g, indent);
                 return prefix + body;
             }).join('\n');
             return '\n' + out + '\n';

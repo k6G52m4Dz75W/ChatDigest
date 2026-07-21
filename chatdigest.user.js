@@ -10,6 +10,7 @@
 // @match        *://claude.ai/*
 // @match        *://www.doubao.com/*
 // @match        *://yuanbao.tencent.com/*
+// @match        *://www.qianwen.com/*
 // @run-at       document-idle
 // @grant        GM_download
 // @grant        GM_setClipboard
@@ -220,6 +221,25 @@
             titleSel: 'h1, h2, .chat-title, header h1',
             inputSel: 'div.ql-editor[contenteditable="true"]',
         },
+        qwen: {
+            name: '千问',
+            // v1.21.0 真实 DOM 调研 (用户实测 e:\projects\qwen.html, 2026-07-21, 250KB):
+            // 千问用 CSS Module hash 风格 (`message-card-j_n6rq` 等), hash 每次 build 变,
+            // 不能直接用 class. 跟 yuanbao/doubao 同一思路: 用**语义化前缀**
+            // + CSS attribute selector `[class*="前缀"]` 部分匹配, 兼容 hash 变种.
+            // - chat-answers-card-wrap: AI 答案 wrapper (含 answer-meta 时间戳 + answer-common-card
+            //   真正内容 + assistant-text 标签) —— 1 命中 (qwen.html 只有 1 条 AI 回复)
+            // - chat-question-card-wrap: user 提问 wrapper (含 message-card-wrap question 内容)
+            //   —— 2 命中 (qwen.html 1 条 user 提问 + 1 个重渲染 wrapper, 都命中)
+            // 输入框是 Slate editor (跟 yuanbao Quill 同一思路, 现代富文本编辑器,
+            // contenteditable + data-slate-editor 是稳定标识): 1 命中.
+            // 标题 HTML 快照里没出现 (跟 yuanbao 一样, conv 标题在 sidebar/header 折叠状态),
+            // 留通用 `h1, h2` fallback. 等用户实测后按需校准 (跟 yuanbao v1.19.0 节奏一样).
+            assistantSel: '[class*="chat-answers-card-wrap"]',
+            userSel:      '[class*="chat-question-card-wrap"]',
+            titleSel:     'h1, h2, .chat-title, header h1',
+            inputSel:     'div[contenteditable="true"][data-slate-editor="true"]',
+        },
     };
 
     /* 自动识别当前站点 */
@@ -231,6 +251,7 @@
         if (host.includes('claude')) return ADAPTERS.claude;
         if (host.includes('doubao')) return ADAPTERS.doubao;
         if (host.includes('yuanbao') || host.includes('tencent')) return ADAPTERS.yuanbao;
+        if (host.includes('qianwen')) return ADAPTERS.qwen;
         return null;
     }
 
@@ -316,6 +337,12 @@
         // - hyc-card-box-process-list: 思考/loading 框 (过程信息, 不是最终回复)
         // - agent-chat__bubble__prefix: AI 头像
         if (/\b(agent-chat__(conv--ai__toolbar|toolbar)|agent-chat__list__item__checkbox|hyc-card-box-process-list|agent-chat__bubble__prefix)\b/i.test(cls)) return true;
+        // 千问 chrome (qwen.html 实测, 2026-07-21):
+        // - chat-msg-bottom-anchor: 消息底部 anchor 元素 (jQuery 风格的滚动锚点)
+        // - answer-meta: AI 答案 metadata wrapper (含 "07月20日 23:11" 时间戳等, 不是内容)
+        // - assistant-text: "AI 助手" 角色标签 (元数据, 不是正文)
+        // - chat-question-wrap: user 提问 wrapper 内层 (chat-question-card-wrap 是外层, 留 wrapper 整条)
+        if (/\b(chat-msg-bottom-anchor|answer-meta|assistant-text|chat-question-wrap)\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

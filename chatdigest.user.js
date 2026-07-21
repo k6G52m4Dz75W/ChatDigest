@@ -1401,7 +1401,7 @@
             'toast.waitingElapsed':     '⏳ 等待生成中…(已等 {s}s)',
             'toast.waitTimeout1':       '⏱️ 未检测到回复（2 分钟超时），请手动抓取',
             'toast.waitTimeout2':       '⏱️ 等待超时（2 分钟），请手动抓取',
-            'summaryPrompt':            '请将我们刚才的全部对话，整理成一篇适合存入知识库的 Markdown 文章。要求：\n1. 提炼核心结论；\n2. 按层级标题重组；\n3. 真正的代码片段才用带语言标识的代码块（如 ```python）；\n4. 直接用标准 Markdown 格式输出（# 标题、表格、列表、加粗等正常渲染即可），不要把整篇文章再包进一个代码块里，也不要加开场白和结束语。',
+            'summaryPrompt':            '请将我们刚才的全部对话，整理成一篇适合存入知识库的 Markdown 文章。要求：\n1. 提炼核心结论；\n2. 按层级标题重组；\n3. 真正的代码片段才用带语言标识的代码块（如 ```python）；\n4. 直接用标准 Markdown 格式输出（# 标题、表格、列表、加粗等正常渲染即可），不要把整篇文章再包进一个代码块里，也不要加开场白和结束语。\n5. 直接返回纯文本，不要打开或调用任何文档工具（豆包自带的 .docx / 文章视图等），内容直接打在聊天消息里。',
         },
         en: {
             'ui.titleFallback': 'Generic mode',
@@ -1441,7 +1441,7 @@
             'toast.waitingElapsed':     '⏳ Waiting... ({s}s elapsed)',
             'toast.waitTimeout1':       '⏱️ No reply detected (2 min timeout), please capture manually',
             'toast.waitTimeout2':       '⏱️ Timeout (2 min), please capture manually',
-            'summaryPrompt':            'Please organize our entire conversation into a Markdown article suitable for a knowledge base. Requirements:\n1. Distill the core conclusions;\n2. Restructure with hierarchical headings;\n3. Use code blocks with language identifiers only for actual code snippets (e.g. ```python);\n4. Output in standard Markdown format (# headings, tables, lists, bold, etc. should render normally) — do NOT wrap the entire article in a single code block, and skip opening/closing pleasantries.',
+            'summaryPrompt':            'Please organize our entire conversation into a Markdown article suitable for a knowledge base. Requirements:\n1. Distill the core conclusions;\n2. Restructure with hierarchical headings;\n3. Use code blocks with language identifiers only for actual code snippets (e.g. ```python);\n4. Output in standard Markdown format (# headings, tables, lists, bold, etc. should render normally) — do NOT wrap the entire article in a single code block, and skip opening/closing pleasantries.\n5. Return plain text directly in the chat message; do not open or invoke any document tools (e.g. site-built-in .docx / article views).',
         },
     };
 
@@ -1493,7 +1493,7 @@
             return t('summaryPrompt');
         } catch (e) {
             console.error('[ChatDigest] SUMMARY_PROMPT t() 失败,使用 fallback 硬编码:', e);
-            return '请将我们刚才的全部对话,整理成一篇适合存入知识库的 Markdown 文章。要求:\n1. 提炼核心结论;2. 按层级标题重组;3. 真正的代码片段才用带语言标识的代码块(如 ```python);4. 直接用标准 Markdown 格式输出(# 标题、表格、列表、加粗等正常渲染即可),不要把整篇文章再包进一个代码块里,也不要加开场白和结束语。';
+            return '请将我们刚才的全部对话,整理成一篇适合存入知识库的 Markdown 文章。要求:\n1. 提炼核心结论;2. 按层级标题重组;3. 真正的代码片段才用带语言标识的代码块(如 ```python);4. 直接用标准 Markdown 格式输出(# 标题、表格、列表、加粗等正常渲染即可),不要把整篇文章再包进一个代码块里,也不要加开场白和结束语;5. 直接返回纯文本,不要打开或调用任何文档工具(豆包自带的 .docx / 文章视图等),内容直接打在聊天消息里。';
         }
     })();
 

@@ -553,9 +553,19 @@
             // strip body 开头 AI 自带的 list marker, 跟外层 prefix 只留一份。
             // 其他站 (DeepSeek / Kimi / 豆包) 用真实 <ol><li> 渲染, body 不带 marker,
             // 这条 replace 不命中, 行为 0 变化。
+            //
+            // v1.21.0 修 (千问 markdown emphasis 错配 bug): 千问 chat-answers-card-wrap
+            // 会把 **X** 解析成 <strong class="qk-md-strong"> (跟 <em> 不一样, em 千问
+            // 不解析, strong 千问会解析), inlineToMd 处理 <strong> → '**' + inner + '**'
+            // 输出 '**内容提炼**'。但 ul handler 这条 stripLead 字符类 `[-*+•·]`
+            // 太宽, body 开头的 '**' 第一个 '*' 命中 stripLead, 被吃掉 1 个,
+            // 留下 '*内容提炼**' + prefix '- ' = '- *内容提炼**：...' (user 报告 case)。
+            // 修: stripLead 加 lookahead '(?!\\*)' 排除 marker 后接 '*' 的 case
+            // (即 markdown bold 起始), 避免误伤 '**X**' 完整配对。yuanbao 的 '•首行'
+            // (无空格 bullet) 仍然命中, 因为 '•' 不在 markdown emphasis 字符类。
             const stripLead = tag === 'ol'
                 ? /^\s*\d+[.)]\s*/
-                : /^\s*[-*+•·]\s*/;
+                : /^\s*[-*+•·](?!\*)\s*/;
             const out = items.map((li, i) => {
                 const prefix = tag === 'ol' ? (i + 1) + '. ' : '- ';
                 let body = blockToMd(li).replace(/^\n+/, '').replace(/\n+$/, '');

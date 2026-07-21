@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ChatDigest / 聊摘 — AI 对话一键整理为 Markdown 知识库
+// @name         ChatDigest / 聊摘 — AI 对话一键整理为 Markdown 知识库 (v1.19.2 cache-bust)
 // @namespace    https://github.com/chatdigest
-// @version      1.19.1
+// @version      1.19.2
 // @description  ChatDigest / 聊摘 — 一键把 AI 对话整理成 Markdown 知识库文章。完全本地 / 无订阅 / 无需 API key / 多站点 (DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝) / 隐私优先 / 玻璃拟态 UI。可选推送到 IMA、Obsidian 等任意 Markdown 友好工具。locale-aware 文件名 (zh = 聊摘, 其他 = ChatDigest)。变更历史见 CHANGELOG.md。
 // @author       ChatDigest Contributors
 // @match        *://chat.deepseek.com/*
@@ -23,6 +23,11 @@
 
 (function () {
     'use strict';
+
+    // v1.19.2 HEARTBEAT: IIFE 最顶部心跳 log, 在 'use strict' 之后立即
+    // 任何 try/catch / const 解析之前. 如果 user F12 看到这行, IIFE 跑了.
+    // 看不到 = Tampermonkey 完全没执行脚本 (cache / @match / 禁用).
+    try { console.log('[ChatDigest HEARTBEAT v1.19.2] IIFE started at', new Date().toISOString(), 'location:', location.href); } catch (_) {}
 
     /* ============================================================
      * v1.15.15 终极保险：IIFE 顶部先注册一个"report bug"菜单项（不依赖 t()/MSGS），

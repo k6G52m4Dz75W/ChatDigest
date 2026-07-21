@@ -29,18 +29,17 @@
        注入版本号 —— user 复制 alert 文本 / dev 看 console log 都能立刻知道是哪个版本触发的。
        提取策略:
          1) 优先 GM_info.script.version (Tampermonkey 注入, 反映**实际运行**版本,
-            跟 @version 头可能因 cache 略不同 —— 比如 @namespace 改了 Tampermonkey 当新脚本)
-         2) 兜底硬编码 '1.20.0' (跟 @version 头对齐, 万一 GM_info 不可用时退而求其次)
-         3) 兜底再兜底 'unknown' (终极保险, 至少 SCRIPT_VERSION 是 string, 不会 throw)
+            跟 @version 头可能因 cache / @namespace 略不同)
+         2) 兜底 'unknown' (不再 hardcode 数字 —— 万一 hardcode 没跟上新版本号,
+            反而会误导排查; 报 'unknown' 时 dev 一眼看出"用户那边 GM_info 异常"
+            该追问, 而不是错信错版本号)
        daily-use 的 console.log / toast 提示不加版本号 (会啰嗦), 只有 report-bug 路径加. */
     let SCRIPT_VERSION = 'unknown';
     try {
         if (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) {
             SCRIPT_VERSION = GM_info.script.version;
-        } else {
-            SCRIPT_VERSION = '1.20.0';
         }
-    } catch (_) { SCRIPT_VERSION = '1.20.0'; }
+    } catch (_) { /* SCRIPT_VERSION 保持 'unknown' */ }
     const CHATDIGEST_TAG = 'ChatDigest: ' + SCRIPT_VERSION;
 
     /* ============================================================

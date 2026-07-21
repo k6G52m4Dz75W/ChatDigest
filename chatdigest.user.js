@@ -1690,26 +1690,6 @@
                 }
                 // v1.15.8：FAB 一键导出按「知识库文章」语义，去掉思考块
                 const md = getLatestReply({ includeThinking: false });
-                // DEBUG-ONLY (yuanbao yaml 头丢失诊断 2): 显式 log md 跟 full 跟 title,
-                // 同时存到 localStorage 防止 console 截断. 跟 99f1e26 的 downloadMarkdown
-                // 内部 log 配对, 区分 "md 本身有问题" vs "buildHeader 输出被吃".
-                if (location.hostname.includes('yuanbao.tencent.com')) {
-                    try {
-                        const title = resolveTitle(md);
-                        const header = buildHeader(title, md);
-                        const full = header + md;
-                        console.log('[ChatDigest DEBUG waitAndAutoSave] md length:', md.length, ', startsWith #?:', /^#\s/.test(md));
-                        console.log('[ChatDigest DEBUG waitAndAutoSave] md first 200:', md.slice(0, 200));
-                        console.log('[ChatDigest DEBUG waitAndAutoSave] title:', JSON.stringify(title));
-                        console.log('[ChatDigest DEBUG waitAndAutoSave] buildHeader output (full first 200):', full.slice(0, 200));
-                        console.log('[ChatDigest DEBUG waitAndAutoSave] buildHeader output (first 12 lines):', full.split('\n').slice(0, 12).join('\n'));
-                        localStorage.setItem('chatdigest-debug-full', full);
-                        localStorage.setItem('chatdigest-debug-md', md);
-                        localStorage.setItem('chatdigest-debug-header', header);
-                    } catch (e) {
-                        console.error('[ChatDigest DEBUG waitAndAutoSave] exception:', e);
-                    }
-                }
                 const ok = downloadMarkdown(md);
                 if (ok && AUTO_PUSH_IMA) {
                     pushToIma(md, buildFileName(md));

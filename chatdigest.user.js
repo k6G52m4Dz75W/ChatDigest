@@ -43,33 +43,30 @@
     const CHATDIGEST_TAG = 'ChatDigest: ' + SCRIPT_VERSION;
 
     /* ============================================================
-     * v1.15.15 终极保险：IIFE 顶部先注册一个"report bug"菜单项（不依赖 t()/MSGS），
-     * 然后整个主流程包 try/catch。任何 module-level throw 都被 catch 住 + alert 显示
-     * 具体错误（用户能直接看到"什么 throw 了"+ 报告给开发者）。
+     * v1.15.15 终极保险：整个主流程包 try/catch。任何 module-level throw
+     * 都被 catch 住 + alert 显示具体错误（用户能直接看到"什么 throw 了"+
+     * 报告给开发者）。
      *
      * 背景：v1.15.11/12 的 MSGS TDZ ReferenceError + v1.15.13/14 的 Tampermonkey 缓存,
      * 用户报告"完全崩了 + 开关也没了",根因是 IIFE 顶层 throw 把整个 userscript 挂掉
      * → FAB 不显示 + registerPushMenu 跑不到 + GM_registerMenuCommand 注册的开关都丢。
      *
-     * 修法（双保险）：
-     * ① 顶部立刻注册一个 hardcoded label 的菜单项 — 即使后续 throw 菜单也保留。
-     * ② 整个主流程包 try/catch — 任何 throw 都被抓住 + alert 详细错误。
-     * 这样用户升 v1.15.15 后,即使还有未知 throw,也能:
-     * - 看到 alert 弹窗告诉"具体什么挂了"（不再是"啥也不出来"黑盒）
-     * - 看到 Tampermonkey 菜单里至少有一项 ChatDigest
-     * - 把 alert 文本贴回给开发者,根因可定位
+     * v1.15.15 的原方案是"双保险": ① 顶部立刻注册一个 hardcoded label 的菜单项
+     * 即使后续 throw 菜单也保留; ② 整个主流程包 try/catch 抓住 throw 弹 alert。
+     *
+     * v1.20.0 改: report bug 菜单**不再**放 IIFE 顶部 (那样会让菜单 UI 顺序变成
+     * "report bug 在 IMA 推送开关之前", user 偏好 report bug 在推送开关下方)；
+     * 移到 waitBody 里 initUI 之后调 registerReportBugMenu(), 跟 registerPushMenu
+     * 同一注册路径, 自然落到 IMA 推送开关后面。
+     *
+     * 代价: line 74-1912 之间 throw 时, 菜单里没 report bug。但这段全是 const/let
+     * 定义 + function 声明 (v1.15.13 已修 MSGS TDZ), 理论上不该 throw; 极端情况
+     * IIFE 顶层 catch 仍兜底, 弹 FATAL alert (CHATDIGEST_TAG 带版本号, user
+     * 复制 alert 文本照样能报告)。
+     *
+     * waitBody 内 initUI 自身 throw 不会丢菜单: try { initUI(); } catch { ... alert; }
+     * 之后仍调 registerPushMenu + registerReportBugMenu。
      * ============================================================ */
-
-    // ① 顶部立刻注册一个"report bug"菜单 (不依赖 t()/MSGS/SITE/PUSH_STORAGE)
-    if (typeof GM_registerMenuCommand === 'function') {
-        try {
-            // v1.20.0: 菜单 label 带版本号 (CHATDIGEST_TAG = "ChatDigest: 1.20.0"),
-            // 跟 alert 弹窗 + console error 用同一个 tag, dev 一眼锁定版本
-            GM_registerMenuCommand(CHATDIGEST_TAG + ' - report bug (open F12 console)', function () {
-                try { alert(CHATDIGEST_TAG + ' - please open F12 console, copy any [ChatDigest FATAL] line, paste to developer.'); } catch (_) {}
-            });
-        } catch (_) { /* 极端情况:连 GM_registerMenuCommand 都不可用 — 跳过 */ }
-    }
 
     // ② 整个主流程包 try/catch — 任何 throw 都被抓住
     try {
@@ -1563,6 +1560,23 @@
         }
     }
 
+    /* v1.20.0: 把"report bug"菜单抽成函数, 在 waitBody 里 initUI 之后调 (跟
+       registerPushMenu 同一路径, 菜单 UI 自然落到 IMA 推送开关下方)。
+       IIFE 顶部不再 inline 注册 (v1.15.15 双保险的"菜单也保留"维度丢一边,
+       但 initUI 自身 throw 仍由 waitBody catch 抓住 + alert, 之后仍调本函数;
+       极端 case 走 IIFE 顶层 catch 弹 FATAL alert 兜底)。
+       label / callback 跟 v1.15.15 时代完全一致, 行为兼容。 */
+    function registerReportBugMenu() {
+        if (typeof GM_registerMenuCommand !== 'function') return;
+        try {
+            // v1.20.0: 菜单 label 带版本号 (CHATDIGEST_TAG = "ChatDigest: 1.20.0"),
+            // 跟 alert 弹窗 + console error 用同一个 tag, dev 一眼锁定版本
+            GM_registerMenuCommand(CHATDIGEST_TAG + ' - report bug (open F12 console)', function () {
+                try { alert(CHATDIGEST_TAG + ' - please open F12 console, copy any [ChatDigest FATAL] line, paste to developer.'); } catch (_) {}
+            });
+        } catch (_) { /* 极端情况:连 GM_registerMenuCommand 都不可用 — 跳过 */ }
+    }
+
     /* 通过本地 HTTP 桥把 Markdown 推给 ima_watcher.py → IMA。
        依赖 GM_xmlhttpRequest（已在元数据 @grant 声明），可跨域访问 localhost。
        v1.15.0：加 timeout: 8000（8s）+ ontimeout 提示。原本没 timeout，
@@ -1908,16 +1922,23 @@
     }
 
     /* 等待 <body> 就绪再注入 UI：兼容 SPA 晚加载 / run-at 时机问题；
-       即使脚本运行过早，也会每 100ms 重试，直到 body 出现。 */
+       即使脚本运行过早，也会每 100ms 重试，直到 body 出现。
+
+       v1.20.0: initUI 的 try/catch 拆开, throw 后仍调 registerPushMenu + registerReportBugMenu
+       —— 这样 initUI 自身 throw 时菜单 UI 顺序仍然完整 (IMA 推送 → report bug),
+       v1.15.15 双保险的"菜单也保留"维度保持 (仅 IIFE 顶层 throw 那一极端 case 丢,
+       由 IIFE 顶层 catch 弹 FATAL alert 兜底)。 */
     (function waitBody() {
         if (document.body) {
             try {
                 initUI();
-                registerPushMenu();
             } catch (err) {
                 console.error(t('console.initFailed'), err);
                 alert(t('alert.initFailed') + ' ' + err.message + '\n' + t('alert.initFailed.detail'));
             }
+            // 无论 initUI 成功还是 throw, 都注册菜单 —— 顺序: IMA 推送开关 → report bug
+            registerPushMenu();
+            registerReportBugMenu();
             return;
         }
         setTimeout(waitBody, 100);

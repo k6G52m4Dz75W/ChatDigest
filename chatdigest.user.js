@@ -24,17 +24,6 @@
 (function () {
     'use strict';
 
-    // v1.19.2 调试改进: 把 @version 显式提到 JS 常量, console 启动 log
-    // 打印版本号 + 编译时间戳. 之前版本只有 '✅ ChatDigest 已启动 · 元宝',
-    // 没法肉眼判断跑的是哪个 commit —— Tampermonkey cache vs 真实版本的
-    // 排查要靠 commit hash, 用户没法看到. 现在 console 一眼能看出 "v1.19.2
-    // @ 2026-07-20 22:00" vs "v1.19.0 @ 2026-07-19 21:00", 知道是 cache
-    // 还是真用了新版.
-    // 改 @version 时这行要同步改. (其实可以读 GM_info.script.version,
-    // 但 GM_info 偶尔延迟注入, 顶层 const 更稳.)
-    const SCRIPT_VERSION = '1.19.0';
-    const SCRIPT_BUILD = '2026-07-20 22:00';
-
     /* ============================================================
      * v1.15.15 终极保险：IIFE 顶部先注册一个"report bug"菜单项（不依赖 t()/MSGS），
      * 然后整个主流程包 try/catch。任何 module-level throw 都被 catch 住 + alert 显示
@@ -1189,6 +1178,13 @@
         }
         const title = (titleOverride !== undefined) ? titleOverride : resolveTitle(content);
         const full = buildHeader(title, content) + content;
+        // DEBUG-ONLY (yuanbao yaml 头丢失诊断): 一次性 console.log full 前 30 行
+        // 确认 buildHeader 输出是否真在 full 里. 看 console 后即删.
+        if (location.hostname.includes('yuanbao.tencent.com')) {
+            console.log('[ChatDigest DEBUG] downloadMarkdown full (first 30 lines):');
+            console.log(full.split('\n').slice(0, 30).join('\n'));
+            console.log('[ChatDigest DEBUG] full length:', full.length, ', content length:', content.length);
+        }
         const fileName = buildFileName(content, titleOverride);
         const blob = new Blob([full], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -1694,6 +1690,26 @@
                 }
                 // v1.15.8：FAB 一键导出按「知识库文章」语义，去掉思考块
                 const md = getLatestReply({ includeThinking: false });
+                // DEBUG-ONLY (yuanbao yaml 头丢失诊断 2): 显式 log md 跟 full 跟 title,
+                // 同时存到 localStorage 防止 console 截断. 跟 99f1e26 的 downloadMarkdown
+                // 内部 log 配对, 区分 "md 本身有问题" vs "buildHeader 输出被吃".
+                if (location.hostname.includes('yuanbao.tencent.com')) {
+                    try {
+                        const title = resolveTitle(md);
+                        const header = buildHeader(title, md);
+                        const full = header + md;
+                        console.log('[ChatDigest DEBUG waitAndAutoSave] md length:', md.length, ', startsWith #?:', /^#\s/.test(md));
+                        console.log('[ChatDigest DEBUG waitAndAutoSave] md first 200:', md.slice(0, 200));
+                        console.log('[ChatDigest DEBUG waitAndAutoSave] title:', JSON.stringify(title));
+                        console.log('[ChatDigest DEBUG waitAndAutoSave] buildHeader output (full first 200):', full.slice(0, 200));
+                        console.log('[ChatDigest DEBUG waitAndAutoSave] buildHeader output (first 12 lines):', full.split('\n').slice(0, 12).join('\n'));
+                        localStorage.setItem('chatdigest-debug-full', full);
+                        localStorage.setItem('chatdigest-debug-md', md);
+                        localStorage.setItem('chatdigest-debug-header', header);
+                    } catch (e) {
+                        console.error('[ChatDigest DEBUG waitAndAutoSave] exception:', e);
+                    }
+                }
                 const ok = downloadMarkdown(md);
                 if (ok && AUTO_PUSH_IMA) {
                     pushToIma(md, buildFileName(md));
@@ -1877,8 +1893,6 @@
         });
 
         console.log('%c' + t('console.started'), 'color:#4D6BFE;font-weight:bold', SITE ? `· ${SITE.name}` : '· ' + t('ui.titleFallback'));
-        // v1.19.2: 加版本号 + 编译时间戳, 排查 cache vs 真实版本用
-        console.log('%c' + `[v${SCRIPT_VERSION} @ ${SCRIPT_BUILD}]`, 'color:#4D6BFE');
     }
 
     /* 等待 <body> 就绪再注入 UI：兼容 SPA 晚加载 / run-at 时机问题；

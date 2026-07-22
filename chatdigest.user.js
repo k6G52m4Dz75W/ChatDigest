@@ -1964,19 +1964,24 @@
         // "Element.innerHTML setter: Sink type mismatch violation blocked by CSP").
         // 改用 DOM API 重建, 跨浏览器 + 跨站 CSP 兼容. 6 个 child elements 结构简单.
         // c2k-title / c2k-menu / 3 个 button (data-act="all/latest/copy") / c2k-fab / c2k-arrow.
-        const menu = document.createElement('div');
-        menu.id = 'c2k-menu';
+        // ⚠️ 局部 const 必须改名 menuEl (不能叫 menu), 否则跟外层 let menu (line 1934
+        // 顶层 `let toastEl = null, fab = null, arrow = null, menu = null, toastTimer = null;`)
+        // 同作用域重名 → "Identifier 'menu' has already been declared". 后面 line 2002
+        // `menu = panel.querySelector('#c2k-menu');` 给外层 let menu 赋值, 引用跟
+        // 局部 menuEl 是同元素 (同一 DOM node), 行为 0 变化.
+        const menuEl = document.createElement('div');
+        menuEl.id = 'c2k-menu';
         const title = document.createElement('div');
         title.className = 'c2k-title';
         title.textContent = `${SOFTWARE_NAME} · ${SITE ? SITE.name : t('ui.titleFallback')}`;
-        menu.appendChild(title);
+        menuEl.appendChild(title);
         for (const [act, key] of [['all', 'btnAll'], ['latest', 'btnLatest'], ['copy', 'btnCopy']]) {
             const btn = document.createElement('button');
             btn.setAttribute('data-act', act);
             btn.textContent = t(`ui.${key}`);
-            menu.appendChild(btn);
+            menuEl.appendChild(btn);
         }
-        panel.appendChild(menu);
+        panel.appendChild(menuEl);
         const actions = document.createElement('div');
         actions.id = 'c2k-actions';
         const fabEl = document.createElement('div');

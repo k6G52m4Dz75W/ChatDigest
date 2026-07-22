@@ -1447,7 +1447,32 @@
             if (!evt.clipboardData) {
                 Object.defineProperty(evt, 'clipboardData', { value: dt, configurable: true });
             }
+            // v1.21.0 改: paste event 同时派发到 input 跟 closest('rich-textarea') 祖先
+            // (Gemini 用 rich-textarea custom element 包装 ql-editor, paste 事件可能
+            // 被 rich-textarea 拦截). 派发两份, 一份给 child 一份给 ancestor wrapper.
             input.dispatchEvent(evt);
+            const richTa = input.closest && input.closest('rich-textarea');
+            if (richTa && richTa !== input) {
+                richTa.dispatchEvent(evt);
+            }
+            // v1.21.0 兜底: paste event 不响应 (Quill 2.x 改 API / 某些 framework 拦截),
+            // 200ms 后如果 input.textContent 仍不包含 text 头 30 字符, 走老
+            // execCommand('insertText') 方法. 兜底**只**在 paste 真不响应时跑, 不影响
+            // paste 响应正常的站 (DeepSeek / Kimi / 豆包 / 元宝 / 千问). Gemini
+            // 站 rich-textarea 包装 + Quill 2.x 可能不响应 synthetic paste event, 需要兜底.
+            setTimeout(() => {
+                if (!input.textContent.includes(text.slice(0, 30))) {
+                    try {
+                        input.focus();
+                        const sel2 = window.getSelection();
+                        const range2 = document.createRange();
+                        range2.selectNodeContents(input);
+                        sel2.removeAllRanges();
+                        sel2.addRange(range2);
+                        document.execCommand('insertText', false, text);
+                    } catch (_) { /* ignore */ }
+                }
+            }, 200);
         }
     }
 
@@ -1714,14 +1739,33 @@
             toast(t('toast.inputNotFound', { ta, ce }), 'error');
             return;
         }
+        const snippet = SUMMARY_PROMPT.slice(0, 30);
         setInputValue(input, SUMMARY_PROMPT);
-        toast(t('toast.summaryInjected'), 'ok');
-        // 等受控组件把内部状态同步完，再触发发送，避免「值已写入但按钮仍禁用」
+        // v1.21.0 改: 加 success check 避免「老回复被误导出」bug.
+        // 之前: 注入失败 / 发送失败, waitAndAutoSave 仍然跑 → 5s 后等 AI 稳定 → 拿**老**
+        // 最新回复导出, user 看到「按了 FAB 没注入, 过段时间导了上一个回复」误以为是注入到了.
+        // 修法: 注入 + 发送各等 500ms 读 input.innerText 验证, 任一失败 toast 错误并 return,
+        // 不调 waitAndAutoSave.
         setTimeout(() => {
+            const injected = (input.innerText || input.textContent || '').includes(snippet);
+            if (!injected) {
+                console.error('[ChatDigest] inject failed: input.innerText 仍不包含 SUMMARY_PROMPT 截 30 字符');
+                toast('注入失败: ' + t('toast.inputNotFound'), 'error');
+                return;
+            }
             autoSend(input);
-            // 发送后稍微等一下让生成开始，再进入等待-保存流程
-            setTimeout(waitAndAutoSave, 1500);
-        }, 300);
+            // 发送后等 500ms 验证 input 被清空 (发送成功 → Quill 提交 + 清空 input)
+            setTimeout(() => {
+                const stillHas = (input.innerText || input.textContent || '').includes(snippet);
+                if (stillHas) {
+                    console.error('[ChatDigest] send failed: input.innerText 仍包含 SUMMARY_PROMPT 截 30 字符 (没被清空)');
+                    toast('发送失败: ' + t('toast.inputNotFound'), 'error');
+                    return;  // 不调 waitAndAutoSave, 避免「老回复被误导出」
+                }
+                // 发送成功, 进入等待-保存流程
+                setTimeout(waitAndAutoSave, 1000);
+            }, 500);
+        }, 500);
     }
 
     /* 自动发送：优先点击「发送」按钮；
@@ -1764,9 +1808,13 @@
         }
 
         const fireEnter = (target) => {
+            // v1.21.0 改: 派发 Enter 键时用 isComposing: false (synthetic event),
+            // 防止 Quill 等编辑器误判 IME 输入中. 派发 3 次 (keydown / keypress / keyup)
+            // 跟浏览器真实 Enter 按下行为一致.
             const fire = (type) => target.dispatchEvent(new KeyboardEvent(type, {
                 key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-                bubbles: true, cancelable: true
+                location: 0,
+                bubbles: true, cancelable: true, composed: true, isComposing: false
             }));
             fire('keydown'); fire('keypress'); fire('keyup');
         };
@@ -1778,8 +1826,15 @@
             // v1.19.1+: contenteditable (Quill / Lexical / Slate) 走真 Enter 键,
             // 不再走 execCommand('insertParagraph') —— 现代编辑器不响应.
             // 元宝的 ql-editor 有 enterkeyhint="send", Quill 监听 keydown 触发发送.
+            // v1.21.0 改: contenteditable 还派发到 closest('rich-textarea') 祖先
+            // (Gemini 站 rich-textarea custom element 包装 ql-editor, rich-textarea
+            // 可能拦截 keydown 不让内部 ql-editor 处理. 派发两份保证收到).
             input.focus();
             fireEnter(input);
+            const richTa = input.closest && input.closest('rich-textarea');
+            if (richTa && richTa !== input) {
+                fireEnter(richTa);
+            }
             toast(t('toast.autoSentEnter'), 'ok');
         }
     }

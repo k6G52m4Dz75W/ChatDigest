@@ -2,7 +2,41 @@
 
 
 
-**Latest: v1.20.1（脚本） / v1.2.8（Python 工具链） / 2026-07-21** — **report-bug 路径注入 @version + 菜单顺序调整 + SCRIPT_VERSION 兜底去 hardcode**:
+**Latest: v1.20.2（脚本） / v1.2.8（Python 工具链） / 2026-07-22** — **千问 (www.qianwen.com) production-ready: 5 fix cascade**:
+
+## v1.20.2：千问 (www.qianwen.com) production-ready: 5 fix cascade (2026-07-22)
+
+千问 ADAPTERS 5 commit cascade 修完, 让千问从"勉强可用"→"真正 production-ready" (跟 v1.18.0 Kimi / v1.20.0 元宝 production-ready 同级). 按 user 决定走 patch (1.20.1 → 1.20.2):
+
+1. **`e9116d1` 千问 (www.qianwen.com) ADAPTERS 适配 — 6 站点全支持**:
+   - 1 个新 ADAPTER (`qwen`), 跟 v1.20.0 元宝一样 4 处改动一致: `@match` `www.qianwen.com` / `ADAPTERS.qwen` / `isUiChrome` 4 个 chrome filter (chat-msg-bottom-anchor / answer-meta / assistant-text / chat-question-wrap) / `detectSite` `qianwen` 路由.
+   - selector 用 CSS attribute `[class*="前缀"]` 兼容千问 CSS Module hash 风格 (`message-card-j_n6rq` 等 hash 每次 build 变, 语义化前缀稳定): `[class*="chat-answers-card-wrap"]` (AI) / `[class*="chat-question-card-wrap"]` (user) / `div[contenteditable="true"][data-slate-editor="true"]` (Slate editor 输入框).
+   - 品牌已统一: `tongyi.aliyun.com` → `www.qianwen.com`, `ADAPTERS.tongyi` → `ADAPTERS.qwen`, `name` `'通义千问'` → `'千问'`. 不 bump @version (跟 yuanbao d9e44e3 / d98bb7a 一样攒一起发).
+
+2. **`af43b88` ul handler stripLead 加 lookahead `(?!\*)`, 避免误伤 markdown bold 起始的 \***:
+   - 症状: 千问 list 里 AI 写的合法 bold `**内容提炼**` 被错配成 `*内容提炼**` (开头 * 缺一个, 结尾 ** 多一个). 千问 table 里的 `**代码展示**` 正常, 但 list 里 `<strong>` 包的就错.
+   - 真根因: 跟 v1.20.0 元宝双 marker 修是**完全同一个 bug 模式**. 千问 chat-answers-card-wrap 把 `**X**` 解析成 `<strong class="qk-md-strong">` (跟 `<em>` 不一样, em 千问不解析, strong 千问**会**解析), `inlineToMd` 处理 `<strong>` → `**` + inner + `**` 输出 `**内容提炼**` (line 414 对的). 但 ul handler 的 `stripLead = /^\s*[-*+•·]\s*/` (line 558) 字符类**包含 `*`**, body 开头 `**` 的第一个 `*` 命中 stripLead, 被吃掉 1 个, 留下 `*内容提炼**`. prefix `- ` + body → `- *内容提炼**`.
+   - 修法: ul stripLead 加 lookahead `(?!\*)` 排除 marker 后接 `*` 的 case (即 markdown bold / italic emphasis 起始): 旧 `/^\s*[-*+•·]\s*/` → 新 `/^\s*[-*+•·](?!\*)\s*/`. `*` 后接 `*` (即 `**X**` bold 起始) → 不命中, 保留完整. `*` 后接空格 (元宝 `* 一些` 残留) → 仍命中, strip `* ` . `•` 后接字符 (元宝 `•首行` 残留) → 仍命中, strip `•`. 数字 marker (ol 路径) → 不受影响, 行为 0 变化. 已知合法路径 (DeepSeek / Kimi / 豆包 / 元宝) 都把 `*X*` 解析成 `<em>`、`**X**` 解析成 `<strong>`, `inlineToMd` line 414/415 对称输出, 不会有错配, fix 走完后正则不命中 → 行为 0 变化.
+
+3. **`22dfd90` 千问表格 chrome strip — `qk-md-table-action*` / `qk-md-table-download-*` / `qk-md-download-icon` / `qk-md-copy-icon` 加 isUiChrome**:
+   - 症状: 千问 table 周围有 action bar (含"表格"标题 + "下载为表格" / "导出为图片" 按钮 + 复制 svg 图标), 这些 chrome 文本泄漏到 .md 导出.
+   - 真根因: `isUiChrome` 千问 regex 没覆盖这些 `qk-md-*` 风格稳定 class. `inlineToMd` 入口 line 409 `if (isUiChrome(el)) return ''` 没匹配 → 走 line 427 `return inner` 透传 textContent → "表格" / "下载为表格" / "导出为图片" 文本泄漏.
+   - 修法: 千问 chrome regex 加 4 个前缀: `qk-md-table-action[-title/-bar]` (action bar wrapper + 子元素) / `qk-md-table-download-[wrapper/icon/menu/menu-item]` (下载按钮 + 菜单, 内含"下载为表格"/"导出为图片" 文字) / `qk-md-download-icon` (下载 svg) / `qk-md-copy-icon` (复制 svg). **不能 strip 同前缀但语义是内容的 class**: `qk-md-table` / `-head` / `-body` / `-row` (真实 table 结构), `qk-md-table-section` / `-wrapper` / `-container` (table 容器, table 在 `-container` 内), `qk-md-text` / `-paragraph` / `-ul` / `-ol` / `-li` / `-strong` / `-code` (实际正文). regex 关键词是 `action` / `download` / `copy`, 不含 `section` / `wrapper` / `container` 等, 安全.
+   - 镜像测试 27/27 pass (8 chrome 命中 + 14 非 chrome 不命中 + 4 原千问 chrome) + 千问真实 DOM 不误伤 4/4 pass.
+
+4. **`e5a9513` 千问卡片预览 chrome strip — `card-container-[\w-]+` 整块**:
+   - 症状: 千问 AI 偶尔会"莫名其妙"嵌入一个卡片链接预览, 整块是 link 引用 (含 svg 缩略图 + title + "创建于 xx:xx" 描述), 跟 AI 写的回复内容无关, 整块泄漏到 .md.
+   - 真根因: `isUiChrome` 千问 regex 没覆盖 `card-container-*` 前缀. 千问 CSS Module hash 风格 (跟 `message-card-j_n6rq` 同款), 但前缀 `card-container` 不在已有 regex. 整块 div 走容器回退, title / 描述文本 / svg 全部透传.
+   - 修法: 千问 chrome regex 加 `card-container-[\w-]+` 前缀 (CSS Module hash 通配). 整块 div 走 `blockToMd` 入口 line 463 `if (isUiChrome(el)) return ''` 一刀切 strip, 不进入 routeChild 递归. 不跟已有 class 冲突: `chat-answers-card-wrap` (千问 ADAPTERS 选中) / `chat-question-card-wrap` / `message-card-wrap` / `message-card-j_n6rq` / `office-card-wrapper-` (qwen.html 命中) / `card-wrap` (qwen.html 命中) 全部不命中 (前缀不同).
+   - 镜像测试 11/11 pass (4 `card-container-*` 命中 + 7 非 chrome 不命中) + 千问真实 DOM 不误伤 4/4 pass.
+
+5. **`4c27dc7` 千问 AI 回复末尾 \`\`\` 装饰 strip — `qk-md-text` + 纯 3+ 反引号 textContent 命中 isUiChrome**:
+   - 症状: user 实际 .md 末尾 1 行孤立 \`\`\`, 全文 0 开场围栏, 0 配对 (1 处 3+ 连续反引号都在末尾). 之前以为是 card-container 内部残留, 实际不是.
+   - 真根因 (用 qwen.html 完整 HTML 重新 verify, 2026-07-22): 千问 AI 回复末尾有个"分隔装饰" — `<br><span class="qk-md-text complete">\`\`\`</span>` 在 `card-container-wide` div **配对范围** 158258-170983 **之后** (绝对 pos 171033, 在 div 外但在 chat-answers-card-wrap 内). 千问不解析 \`\`\` 围栏, 原样 textContent. `inlineToMd` 对 span fall through line 427 `return inner` 透传, raw \`\`\` 字符进 .md 末尾, `blockToMd` 容器回退 line 608 `return '\n' + ... + '\n\n'` 拼成末尾 1 行孤立 \`\`\`. `balanceFences` 不会补 (0 开场不补), `unwrapSourceFences` 不会解 (无围栏可解). 这次加固**按 user 思路 (不是末尾 strip hack), 直接加固 isUiChrome 拦截源**.
+   - 修法: `isUiChrome` line 313 加一条检查 — 千问 `qk-md-text` class + textContent 是**纯 3+ 反引号** (regex `/^[ \t\n]*\`{3,}[ \t\n]*$/`) → strip. **不能误伤**: 含其他字符的 qk-md-text (如 `<span class="qk-md-text complete">普通文本</span>`) 仍正常透传, 因为 regex 要求 textContent 严格匹配纯反引号.
+   - 镜像测试 16/16 pass (user 报告 case + 各种边界: 末尾换行 / 前后空白 / 6 反引号 / 混合字符 / 其他 class / 简化 class / 已有 chrome / 单反引号 / 双反引号 / 空 textContent / 纯空白). qwen.html 真实 span (`<br><span class="qk-md-text complete">\`\`\`</span>`) 验证 isUiChrome 命中 True.
+
+## v1.20.1：report-bug 路径注入 @version + 菜单顺序调整 + SCRIPT_VERSION 兜底去 hardcode (2026-07-21)
 
 ## v1.20.1：report-bug 路径注入 @version + 菜单顺序调整 + SCRIPT_VERSION 兜底去 hardcode (2026-07-21)
 

@@ -35,8 +35,8 @@
 
 ## Supported Sites
 
-| AI site          | URL                     | Status         | One-click export (📑 FAB) | Export all (📚) |
-| ---------------- | ----------------------- | -------------- | ------------------------- | --------------- |
+| AI site          | URL                     | Status         | 📑 One-click export        | 📚 Export all    |
+| ---------------- | ----------------------- | -------------- | -------------------------- | ---------------- |
 | <img src="https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> DeepSeek         | `chat.deepseek.com`     | ✅ Supported   | ✅                        | ✅              |
 | <img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> ChatGPT          | `chatgpt.com`           | ✅ Supported   | ✅                        | ✅              |
 | <img src="https://www.google.com/s2/favicons?domain=www.kimi.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Kimi             | `www.kimi.com`          | ✅ Supported   | ✅                        | ✅              |

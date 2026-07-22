@@ -35,8 +35,8 @@
 
 ## 支持站点
 
-| AI 站点          | URL                     | 状态      | 一键导出 (📑 FAB) | 导出全部对话 (📚) |
-| ---------------- | ----------------------- | --------- | ----------------- | ----------------- |
+| AI 站点          | URL                     | 状态      | 📑 一键导出         | 📚 导出全部对话       |
+| ---------------- | ----------------------- | --------- | ------------------ | -------------------- |
 | <img src="https://www.google.com/s2/favicons?domain=chat.deepseek.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> DeepSeek         | `chat.deepseek.com`     | ✅ 已支持 | ✅                | ✅                |
 | <img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> ChatGPT          | `chatgpt.com`           | ✅ 已支持 | ✅                | ✅                |
 | <img src="https://www.google.com/s2/favicons?domain=www.kimi.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Kimi             | `www.kimi.com`          | ✅ 已支持      | ✅                | ✅                |

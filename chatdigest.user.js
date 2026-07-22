@@ -1540,7 +1540,6 @@
             'toast.sendFailed':         '⚠️ 发送失败：站点未在 3s 内响应（input 仍含 prompt, AI 也没开始回复）',
             'toast.summaryInjected':    '✨ 已注入「总结咒语」，即将自动发送…',
             'toast.autoSent':           '🚀 已自动发送',
-            'toast.autoSentEnter':      '🚀 已自动发送（Enter）',
             'toast.autoTried':          '🚀 已尝试发送',
             'toast.waitingGen':         '⏳ 正在等待 {name} 生成完成…',
             'toast.waitingElapsed':     '⏳ 等待生成中…(已等 {s}s)',
@@ -1581,7 +1580,6 @@
             'toast.sendFailed':         '⚠️ Send failed: site did not respond in 3s (input still has prompt, AI also not replying)',
             'toast.summaryInjected':    '✨ Summary spell injected, sending...',
             'toast.autoSent':           '🚀 Auto-sent',
-            'toast.autoSentEnter':      '🚀 Auto-sent (Enter)',
             'toast.autoTried':          '🚀 Tried to send',
             'toast.waitingGen':         '⏳ Waiting for {name} to finish...',
             'toast.waitingElapsed':     '⏳ Waiting... ({s}s elapsed)',
@@ -1770,7 +1768,9 @@
                 const newReplyStarted = msgsAfter > msgsBefore;
                 const newUserSent = usersAfter > usersBefore;
                 if (!stillHas || newReplyStarted || newUserSent) {
-                    // (a)/(b)/(c) 任一通过 → 发送成功
+                    // (a)/(b)/(c) 任一通过 → 发送成功 (此时才显示 "已自动发送",
+                    // click 本身只是 attempt, 不算成功)
+                    toast(t('toast.autoSent'), 'ok');
                     setTimeout(waitAndAutoSave, 1000);
                     return;
                 }
@@ -1839,7 +1839,6 @@
                 const richTa = input.closest && input.closest('rich-textarea');
                 if (richTa && richTa !== input) fireEnter(richTa);
             }
-            toast(t('toast.autoSentEnter'), 'ok');
         };
 
         // v1.21.0 加固 (user 实测 Gemini 报告 "send button 在输入后才出现"):
@@ -1850,6 +1849,12 @@
         // 包装下 fireEnter 也不工作 → send failed.
         // 修法: 轮询 sendSel 找 button, 最多 2s (Angular re-render 实际 <500ms 足够 buffer).
         // 按钮一出现立刻 click. 2s 超时才走 fireEnter fallback.
+        //
+        // v1.21.0 改: **不**在这里 toast "已自动发送" — click / fireEnter 只是**尝试**发送,
+        // 跟真正的 "发送成功" 不是一回事. user 实测报告: 文本刚出现在输入框 toast 就显示
+        // "已自动发送", 但实际没发送 → 3s 后又显示 "发送失败", 两个 toast 矛盾. 修法:
+        // autoSend 只做 attempt (click / fireEnter), 不显示 toast. 真正的成功 / 失败 toast
+        // 在 injectSummaryPrompt 的 3s check 里, 根据 user-query / msgs / input 状态判断.
         const startTs = Date.now();
         const POLL_MAX = 2000;
         const POLL_INTERVAL = 100;
@@ -1861,7 +1866,6 @@
             } catch (e) { btn = null; }
             if (btn) {
                 btn.click();
-                toast(t('toast.autoSent'), 'ok');
                 return;
             }
             if (Date.now() - startTs > POLL_MAX) {

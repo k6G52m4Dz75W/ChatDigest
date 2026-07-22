@@ -1537,6 +1537,7 @@
             'toast.pushTimeout':        '⚠️ IMA 推送超时（{s}s），请检查 ima_watcher.py',
             'toast.siteNotSupported':   '⚠️ 当前站点未适配',
             'toast.inputNotFound':      '⚠️ 找不到输入框（页面有 {ta} 个 textarea / {ce} 个可编辑区）',
+            'toast.sendFailed':         '⚠️ 发送失败：站点未在 3s 内响应（input 仍含 prompt, AI 也没开始回复）',
             'toast.summaryInjected':    '✨ 已注入「总结咒语」，即将自动发送…',
             'toast.autoSent':           '🚀 已自动发送',
             'toast.autoSentEnter':      '🚀 已自动发送（Enter）',
@@ -1577,6 +1578,7 @@
             'toast.pushTimeout':        '⚠️ IMA push timeout ({s}s), check ima_watcher.py',
             'toast.siteNotSupported':   '⚠️ Current site not supported',
             'toast.inputNotFound':      '⚠️ Input box not found (page has {ta} textareas / {ce} contenteditable)',
+            'toast.sendFailed':         '⚠️ Send failed: site did not respond in 3s (input still has prompt, AI also not replying)',
             'toast.summaryInjected':    '✨ Summary spell injected, sending...',
             'toast.autoSent':           '🚀 Auto-sent',
             'toast.autoSentEnter':      '🚀 Auto-sent (Enter)',
@@ -1740,15 +1742,19 @@
             return;
         }
         const snippet = SUMMARY_PROMPT.slice(0, 30);
-        // 记录发送前 msgs 数量, 发送后用 msgs.length 增加作为"AI 开始回复"信号
-        // (Gemini 模式: user message 移到对话顶部, input 仍含 user message 副本
-        // **不立即**清空, 500ms 检查 input 仍含 snippet → 误判发送失败.
-        // 实际 waitAndAutoSave 等 5s 后 msgs 会出现新 model-response, 这才是真成功信号).
+        // 记录发送前 msgs / users 数量. 三个成功信号**任一**通过即发送成功:
+        //   (a) input.innerText 不含 snippet  → input 已清空 (Quill 默认模式, 跟 Kimi/元宝/千问 一样)
+        //   (b) msgs.length 增加              → model-response 出现 (AI 开始 streaming, 1-5s)
+        //   (c) users.length 增加             → user-query 出现 (Gemini 模式, Enter 处理后 ~100ms 秒出)
+        // Gemini 实测 (gemini.html 2026-07-22, 247KB): user-query 跟 model-response 都是 <user-query> /
+        // <model-response> custom element, 跟 ADAPTERS.gemini.userSel/assistantSel 完全对齐,
+        // 所以 getUserMessages() 计数可靠. user-query 在 Enter 处理后立即添加 (等 AI 启动),
+        // 比 model-response 早 1-5s 出现 → 最稳的"发送已处理"信号.
+        // 之前 3s check 只看 (a)+(b), 大 prompt / 慢网下 AI 启动慢 → 3s 内 model-response 还没出,
+        // 误判 send failed. 加 (c) 完美覆盖.
         const msgsBefore = getAssistantMessages().length;
+        const usersBefore = getUserMessages().length;
         setInputValue(input, SUMMARY_PROMPT);
-        // v1.21.0 改: 加 success check 避免「老回复被误导出」bug.
-        // 之前: 注入失败 / 发送失败, waitAndAutoSave 仍然跑 → 5s 后等 AI 稳定 → 拿**老**
-        // 最新回复导出, user 看到「按了 FAB 没注入, 过段时间导了上一个回复」误以为是注入到了.
         setTimeout(() => {
             const injected = (input.innerText || input.textContent || '').includes(snippet);
             if (!injected) {
@@ -1757,25 +1763,19 @@
                 return;
             }
             autoSend(input);
-            // v1.21.0 改: 发送后等 3s (vs 500ms). Gemini 站 Quill 响应 Enter 后流程:
-            // 1) user message 移到对话顶部 (input 仍含 user message 副本 **不**立即清空)
-            // 2) AI 开始生成回复 (新 model-response 出现, msgs.length 增加)
-            // 500ms 检查 input.innerText 仍含 snippet → 误判"发送失败" (实测 user 报).
-            // 修法: 3s 后**任一**通过:
-            //   (a) input.innerText 不含 snippet (input 已清空, 正常 Quill 模式)
-            //   (b) msgs.length 增加 (AI 开始回复, Gemini 模式)
-            // 两者都失败 → 真发送失败, 不调 waitAndAutoSave (避免「老回复被误导出」)
             setTimeout(() => {
                 const stillHas = (input.innerText || input.textContent || '').includes(snippet);
                 const msgsAfter = getAssistantMessages().length;
+                const usersAfter = getUserMessages().length;
                 const newReplyStarted = msgsAfter > msgsBefore;
-                if (!stillHas || newReplyStarted) {
-                    // (a) input 已清空 或 (b) AI 开始回复 → 发送成功
+                const newUserSent = usersAfter > usersBefore;
+                if (!stillHas || newReplyStarted || newUserSent) {
+                    // (a)/(b)/(c) 任一通过 → 发送成功
                     setTimeout(waitAndAutoSave, 1000);
                     return;
                 }
-                console.error('[ChatDigest] send failed: input.innerText 仍含 snippet, msgs.length 也未增加');
-                toast('发送失败: ' + t('toast.inputNotFound'), 'error');
+                console.error('[ChatDigest] send failed: input.innerText 仍含 snippet, msgs/users.length 也未增加');
+                toast('发送失败: ' + t('toast.sendFailed'), 'error');
                 return;  // 不调 waitAndAutoSave, 避免「老回复被误导出」
             }, 3000);
         }, 500);

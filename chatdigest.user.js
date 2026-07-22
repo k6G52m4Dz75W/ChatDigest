@@ -515,23 +515,32 @@
        "找 code element" + "找 language" — 共同行为 (empty 检查 / MD_SOURCE_LANGS
        解包 / wrapFencedCode 包围栏) 全部走 helper.
 
-       实测 (user 提供真实 outerHTML, Python 模拟整个 6276676 refactor 行为):
-       Gemini mpv.conf 例子, <code-block> 抽 lang="ini, toml" + code textContent
-       (含 hljs 注释) → codeBlockToMd 返回 `\\n```ini, toml\\n<text>\\n```\\n`
-       (lang="ini, toml" 不在 MD_SOURCE_LANGS, looksLikeMarkdownSource 不命中
-       lang=="" 分支, wrapFencedCode 正常 wrap). 0 行为 regression.
+       v1.21.0 修: 删 (lang === "" && looksLikeMarkdownSource(text)) heuristic.
+       原因: Gemini 站普通 <pre><code> 渲染 (没 <code-block> custom element
+       包装, 例如 "## 四、极客配置参考" 段) <code> class 不含 language-XXX → lang="" →
+       looksLikeMarkdownSource(text) 误判 (mpv.conf 的 `# 注释` 命中
+       `(^|\\n)#{1,6}\\s` heads=2 ≥ 2) → 解包不 wrap — "代码块包裹没了"
+       的另一类真根因 (跟 <code-block> handler 修复是不同路径).
+       修法: 只在 MD_SOURCE_LANGS.includes(lang) 明确是源码 lang 时解包,
+       没 lang 标识符时**不**假设是 markdown 源码, 走 wrapFencedCode 正常 wrap.
+       unwrapSourceFences 仍用 looksLikeMarkdownSource heuristic (风险低 —
+       fence 字符类 [a-zA-Z0-9_+#.\-] 严格, 实际触发少).
 
-       修法历史背景 (重要): f394fed 之前 (没 <code-block> handler) Gemini 站
-       <code-block> 走 generic walk → <pre> 走 <pre> 分支 → Gemini <code> class
-       不含 language-XXX → lang="" → looksLikeMarkdownSource(text) 误判 (mpv.conf
-       的 `# 注释` 命中 `(^|\\n)#{1,6}\\s` heads=2 ≥ 2) → return `\\n${text}\\n`
-       **解包不 wrap** — "代码块包裹没了" 的真根因. 抽 helper 不解决这问题,
-       是 <code-block> handler 绕开 <pre> 分支 + 直接 wrapFencedCode 才修.
-       抽 helper 是 refactor, 修 bug 的是 handler 加 <code-block> case. */
+       真测 (user 反馈, 2026-07-22): "## 四、极客配置参考" 段 Gemini DOM 普通
+       <pre><code> 渲染, lang="" 走 <pre> 分支 → codeBlockToMd(code, "") →
+       之前 heuristic 命中 → 解包不 wrap. 修后走 wrapFencedCode(text, "") →
+       返回 ` ```\n<text>\n``` ` 正常 wrap. 0 行为 regression (DeepSeek 站 lang
+       标识符真实, 走 MD_SOURCE_LANGS 路径; 不会触发 heuristic).
+
+       修法历史背景:
+       1. f394fed 之前 (没 <code-block> handler) Gemini 站 <code-block> 走 generic walk
+          → <pre> 走 <pre> 分支 → heuristic 误判解包 — 680ee36 加 <code-block> handler 修.
+       2. v1.21.0 (本 commit) Gemini 站普通 <pre><code> 走 <pre> 分支 → heuristic 误判解包
+          — 删 heuristic 修. 两种 case 走不同路径, 都需要修. */
     function codeBlockToMd(codeEl, lang) {
         const text = (codeEl.textContent || '').replace(/^\n+/, '').replace(/\n+$/, '');
         if (!text.trim()) return '';
-        if (MD_SOURCE_LANGS.includes(lang) || (lang === '' && looksLikeMarkdownSource(text))) {
+        if (MD_SOURCE_LANGS.includes(lang)) {
             return '\n' + text + '\n';
         }
         return wrapFencedCode(text, lang);

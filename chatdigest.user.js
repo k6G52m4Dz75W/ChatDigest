@@ -1824,12 +1824,23 @@
             // v1.21.0 改: 派发 Enter 键时用 isComposing: false (synthetic event),
             // 防止 Quill 等编辑器误判 IME 输入中. 派发 3 次 (keydown / keypress / keyup)
             // 跟浏览器真实 Enter 按下行为一致.
-            const fire = (type) => target.dispatchEvent(new KeyboardEvent(type, {
+            // v1.21.0 增: 同时派发 beforeinput (inputType=insertLineBreak) — 现代
+            // Quill / Lexical / Slate 跟 contenteditable 接收 Enter 的关键路径,
+            // 跟 keydown 互补 (某些 editor 只监听 beforeinput, 某些只监听 keydown).
+            const keyOpts = {
                 key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
                 location: 0,
                 bubbles: true, cancelable: true, composed: true, isComposing: false
-            }));
-            fire('keydown'); fire('keypress'); fire('keyup');
+            };
+            target.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+            try {
+                target.dispatchEvent(new InputEvent('beforeinput', {
+                    inputType: 'insertLineBreak',
+                    bubbles: true, cancelable: true, composed: true
+                }));
+            } catch (_) { /* 旧浏览器无 InputEvent constructor, 跳过 */ }
+            target.dispatchEvent(new KeyboardEvent('keypress', keyOpts));
+            target.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
         };
 
         if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
@@ -1842,12 +1853,23 @@
             // v1.21.0 改: contenteditable 还派发到 closest('rich-textarea') 祖先
             // (Gemini 站 rich-textarea custom element 包装 ql-editor, rich-textarea
             // 可能拦截 keydown 不让内部 ql-editor 处理. 派发两份保证收到).
+            // v1.21.0 加固: Gemini 实测 (cc5a864 修了 user-query 信号) 单层 + 双层派发
+            // 仍落空 — rich-textarea 的 atmentions 指令 / Angular @HostListener 在不同
+            // listener 链上, 单 target 派发会被某一层吃掉 (e.g. atmentions stopPropagation,
+            // 或 prod build 的 isTrusted check). 5 target 派发 (ql-editor / ql-editor firstChild /
+            // rich-textarea / input-area-v2 / document.body) 覆盖所有 path, 任一 listener
+            // 收到就触发 send. beforeinput 也走 modern editor 路径.
             input.focus();
             fireEnter(input);
+            // ql-editor 第一个子元素 (p / br) — Quill 内部 listener 可能在 child
+            const firstChild = input.firstElementChild;
+            if (firstChild && firstChild !== input) fireEnter(firstChild);
             const richTa = input.closest && input.closest('rich-textarea');
-            if (richTa && richTa !== input) {
-                fireEnter(richTa);
-            }
+            if (richTa && richTa !== input) fireEnter(richTa);
+            // 兜底: 外层 input-area-v2 (Angular component 容器) 跟 document.body (全局 listener)
+            const outer = input.closest('input-area-v2');
+            if (outer && outer !== input && outer !== richTa) fireEnter(outer);
+            fireEnter(document.body);
             toast(t('toast.autoSentEnter'), 'ok');
         }
     }

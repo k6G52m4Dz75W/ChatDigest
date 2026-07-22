@@ -1807,11 +1807,20 @@
        有 `enterkeyhint="send"`, 派发真 KeyboardEvent('keydown', { key: 'Enter' })
        才会触发 Quill 的 onKeyDown handler → 发送. */
     function autoSend(input) {
-        const sendSel = '[id="yuanbao-send-btn"], button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button, .send-button-container, [name="Send"]';
+        // v1.21.0 改: 加 [data-test-id*="send-button"] + button[aria-label="发送"] 命中 Gemini
+        // 实测 send button: <button class="mdc-icon-button mat-mdc-icon-button ..." aria-label="发送">
+        // 在 <div data-test-id="send-button-container"> 内. 之前 sendSel 缺 data-test-id 兜底,
+        // 加上 Material Design 的 CSS (transform / overflow:hidden wrap) 让 offsetParent === null
+        // 导致 button[aria-label*="发送"] 匹配上但可见性 check 失败 → 走 fireEnter fallback.
+        // 修法: 加 [data-test-id*="send-button"] 兜底 + 可见性 check 用 getClientRects 兜底
+        // (跟 findInput 同一套).
+        const sendSel = '[id="yuanbao-send-btn"], [data-test-id*="send-button"], button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button, .send-button-container, [name="Send"]';
+        const isVisible = (el) => el.offsetParent !== null ||
+            (el.getClientRects && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none');
         let btn = null;
         try {
             btn = Array.from(document.querySelectorAll(sendSel))
-                .find(b => b.offsetParent !== null && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
+                .find(b => isVisible(b) && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
         } catch (e) { btn = null; }
 
         if (btn) {
@@ -1824,23 +1833,12 @@
             // v1.21.0 改: 派发 Enter 键时用 isComposing: false (synthetic event),
             // 防止 Quill 等编辑器误判 IME 输入中. 派发 3 次 (keydown / keypress / keyup)
             // 跟浏览器真实 Enter 按下行为一致.
-            // v1.21.0 增: 同时派发 beforeinput (inputType=insertLineBreak) — 现代
-            // Quill / Lexical / Slate 跟 contenteditable 接收 Enter 的关键路径,
-            // 跟 keydown 互补 (某些 editor 只监听 beforeinput, 某些只监听 keydown).
-            const keyOpts = {
+            const fire = (type) => target.dispatchEvent(new KeyboardEvent(type, {
                 key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
                 location: 0,
                 bubbles: true, cancelable: true, composed: true, isComposing: false
-            };
-            target.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
-            try {
-                target.dispatchEvent(new InputEvent('beforeinput', {
-                    inputType: 'insertLineBreak',
-                    bubbles: true, cancelable: true, composed: true
-                }));
-            } catch (_) { /* 旧浏览器无 InputEvent constructor, 跳过 */ }
-            target.dispatchEvent(new KeyboardEvent('keypress', keyOpts));
-            target.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
+            }));
+            fire('keydown'); fire('keypress'); fire('keyup');
         };
 
         if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
@@ -1853,23 +1851,12 @@
             // v1.21.0 改: contenteditable 还派发到 closest('rich-textarea') 祖先
             // (Gemini 站 rich-textarea custom element 包装 ql-editor, rich-textarea
             // 可能拦截 keydown 不让内部 ql-editor 处理. 派发两份保证收到).
-            // v1.21.0 加固: Gemini 实测 (cc5a864 修了 user-query 信号) 单层 + 双层派发
-            // 仍落空 — rich-textarea 的 atmentions 指令 / Angular @HostListener 在不同
-            // listener 链上, 单 target 派发会被某一层吃掉 (e.g. atmentions stopPropagation,
-            // 或 prod build 的 isTrusted check). 5 target 派发 (ql-editor / ql-editor firstChild /
-            // rich-textarea / input-area-v2 / document.body) 覆盖所有 path, 任一 listener
-            // 收到就触发 send. beforeinput 也走 modern editor 路径.
             input.focus();
             fireEnter(input);
-            // ql-editor 第一个子元素 (p / br) — Quill 内部 listener 可能在 child
-            const firstChild = input.firstElementChild;
-            if (firstChild && firstChild !== input) fireEnter(firstChild);
             const richTa = input.closest && input.closest('rich-textarea');
-            if (richTa && richTa !== input) fireEnter(richTa);
-            // 兜底: 外层 input-area-v2 (Angular component 容器) 跟 document.body (全局 listener)
-            const outer = input.closest('input-area-v2');
-            if (outer && outer !== input && outer !== richTa) fireEnter(outer);
-            fireEnter(document.body);
+            if (richTa && richTa !== input) {
+                fireEnter(richTa);
+            }
             toast(t('toast.autoSentEnter'), 'ok');
         }
     }

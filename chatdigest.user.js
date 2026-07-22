@@ -1807,27 +1807,14 @@
        有 `enterkeyhint="send"`, 派发真 KeyboardEvent('keydown', { key: 'Enter' })
        才会触发 Quill 的 onKeyDown handler → 发送. */
     function autoSend(input) {
-        // v1.21.0 改: 加 [data-test-id*="send-button"] + button[aria-label="发送"] 命中 Gemini
+        // v1.21.0 改: 加 [data-test-id*="send-button"] 命中 Gemini
         // 实测 send button: <button class="mdc-icon-button mat-mdc-icon-button ..." aria-label="发送">
-        // 在 <div data-test-id="send-button-container"> 内. 之前 sendSel 缺 data-test-id 兜底,
-        // 加上 Material Design 的 CSS (transform / overflow:hidden wrap) 让 offsetParent === null
-        // 导致 button[aria-label*="发送"] 匹配上但可见性 check 失败 → 走 fireEnter fallback.
-        // 修法: 加 [data-test-id*="send-button"] 兜底 + 可见性 check 用 getClientRects 兜底
-        // (跟 findInput 同一套).
+        // 在 <div data-test-id="send-button-container"> 内. 之前 sendSel 缺 data-test-id 兜底.
+        // 可见性 check 用 getClientRects + getComputedStyle 兜底 Material Design CSS quirk
+        // (transform / overflow:hidden wrap 让 offsetParent === null).
         const sendSel = '[id="yuanbao-send-btn"], [data-test-id*="send-button"], button[type="submit"], button[aria-label*="发送"], button[aria-label*="send" i], [data-testid="send-button"], .ds-send-button, .send-button, #send-button, .send-button-container, [name="Send"]';
         const isVisible = (el) => el.offsetParent !== null ||
             (el.getClientRects && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none');
-        let btn = null;
-        try {
-            btn = Array.from(document.querySelectorAll(sendSel))
-                .find(b => isVisible(b) && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
-        } catch (e) { btn = null; }
-
-        if (btn) {
-            btn.click();
-            toast(t('toast.autoSent'), 'ok');
-            return;
-        }
 
         const fireEnter = (target) => {
             // v1.21.0 改: 派发 Enter 键时用 isComposing: false (synthetic event),
@@ -1840,25 +1827,50 @@
             }));
             fire('keydown'); fire('keypress'); fire('keyup');
         };
-
-        if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-            fireEnter(input);
-            toast(t('toast.autoSentEnter'), 'ok');
-        } else {
-            // v1.19.1+: contenteditable (Quill / Lexical / Slate) 走真 Enter 键,
-            // 不再走 execCommand('insertParagraph') —— 现代编辑器不响应.
-            // 元宝的 ql-editor 有 enterkeyhint="send", Quill 监听 keydown 触发发送.
-            // v1.21.0 改: contenteditable 还派发到 closest('rich-textarea') 祖先
-            // (Gemini 站 rich-textarea custom element 包装 ql-editor, rich-textarea
-            // 可能拦截 keydown 不让内部 ql-editor 处理. 派发两份保证收到).
-            input.focus();
-            fireEnter(input);
-            const richTa = input.closest && input.closest('rich-textarea');
-            if (richTa && richTa !== input) {
-                fireEnter(richTa);
+        const fireEnterFallback = () => {
+            // contenteditable 路径也派发到 closest('rich-textarea') 祖先 (Gemini 站
+            // rich-textarea custom element 包装 ql-editor, rich-textarea 可能拦截
+            // keydown 不让内部 ql-editor 处理, 派发两份保证收到).
+            if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+                fireEnter(input);
+            } else {
+                input.focus();
+                fireEnter(input);
+                const richTa = input.closest && input.closest('rich-textarea');
+                if (richTa && richTa !== input) fireEnter(richTa);
             }
             toast(t('toast.autoSentEnter'), 'ok');
-        }
+        };
+
+        // v1.21.0 加固 (user 实测 Gemini 报告 "send button 在输入后才出现"):
+        // 很多站 (Gemini / 元宝) send button 不是页面加载时就在 DOM, 是**内容驱动**的
+        // — ql-editor 有内容后 Angular re-render 才加 "visible" class + 切 display:none→block.
+        // 之前 autoSend 同步 find button, 500ms 内 Angular re-render 没完成 → 按钮还在
+        // display:none → isVisible false → btn null → 走 fireEnter fallback → Gemini rich-textarea
+        // 包装下 fireEnter 也不工作 → send failed.
+        // 修法: 轮询 sendSel 找 button, 最多 2s (Angular re-render 实际 <500ms 足够 buffer).
+        // 按钮一出现立刻 click. 2s 超时才走 fireEnter fallback.
+        const startTs = Date.now();
+        const POLL_MAX = 2000;
+        const POLL_INTERVAL = 100;
+        const tryClick = () => {
+            let btn = null;
+            try {
+                btn = Array.from(document.querySelectorAll(sendSel))
+                    .find(b => isVisible(b) && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
+            } catch (e) { btn = null; }
+            if (btn) {
+                btn.click();
+                toast(t('toast.autoSent'), 'ok');
+                return;
+            }
+            if (Date.now() - startTs > POLL_MAX) {
+                fireEnterFallback();
+                return;
+            }
+            setTimeout(tryClick, POLL_INTERVAL);
+        };
+        tryClick();
     }
 
     /* 轮询等待最新回复生成完毕：文本连续 2 次（约 2s）无变化、且页面无「停止」按钮时，

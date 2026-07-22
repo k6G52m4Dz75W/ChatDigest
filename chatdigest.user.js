@@ -408,6 +408,17 @@
             el.closest('gem-popover') ||
             el.closest('mat-menu')
         )) return true;
+        // v1.21.0 增: 跨站通用 accessibility-hidden 元素 (Material Design / Bootstrap / WAI-ARIA 风格).
+        // 视觉上不可见 (CSS `clip: rect(0 0 0 0); position: absolute;`) 但 textContent 还在 DOM 里,
+        // 抓取路径会误捕获. 实测: gemini.html offset 164506 有
+        // `<h2 class="cdk-visually-hidden screen-reader-model-response-label">Gemini 说</h2>`
+        // (Angular Material screen-reader-only 元素, 出现在 AI 回复开头).
+        // 跨站覆盖:
+        // - cdk-visually-hidden: Material Design / Angular Material 标准 class
+        // - sr-only / u-sr-only: Bootstrap 3 / 通用
+        // - visually-hidden: Bootstrap 4 / 通用
+        // - screen-reader-only / screen-reader-text: 各种自定义变体
+        if (/\b(cdk-visually-hidden|u?sr-only|visually-hidden|screen-reader-(only|text))\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

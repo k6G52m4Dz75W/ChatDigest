@@ -458,9 +458,27 @@
        行为 100% 等价（fenceLen 算法 + 围栏拼接顺序都不变），仅 1 处定义 + 2 处调用。
        v1.15.7 补充：UNWRAP_LANGS 列表原本两处**有意不同**（pre 5 个 / md-code-block 8 个，含 plain/english/eng），
        但 v1.15.7 进一步提到 MD_SOURCE_LANGS 统一（见下）后，差异消除——本 helper 不再涉及。 */
+    /* v1.21.0 改: normalize lang 字符串, 去掉所有非合法 fence lang 字符.
+       修 Gemini 站 user 实测 "ini, toml 字样直接没了, 也没有代码块包裹了":
+       Gemini 的 lang label 是 UI 用的 "Ini, TOML" / "Python 3" / "c++" 等,
+       含 `,` / ` ` / `+` 等字符. CommonMark spec 允许 info string 是任意字符,
+       但**实际 markdown renderer** (VS Code / Obsidian / Typora / GitHub web) 看到
+       含 `,` / ` ` 的 lang 标识符**不** wrap 成 code block, 整段当 inline text 处理 —
+       user 看到 "使用 gpu-next 渲染器..." 没围栏.
+
+       修法: 把 lang 里所有非 `[a-zA-Z0-9_+#.\-]` 字符替换成 `''`, 让 lang 字符串
+       100% 是合法 fence lang 字符. `ini, toml` → `initoml` (6 字符, renderer 接受,
+       不会 wrap 失败). `Python 3` → `Python3`. `c++` → `c`. `C#` → `C`.
+       保留所有 ASCII 字母数字 + `_+#-.` 字符, 跨 renderer 兼容.
+
+       验证 (Python 模拟 user 提供的真实 outerHTML, 2026-07-22):
+       - Gemini mpv.conf: lang "ini, toml" → "initoml" → 围栏 ` ```initoml ` 任何 renderer 正常 wrap
+       - 之前合法 lang (python / js / bash / json / markdown / 等) normalize 后不变, 0 行为 regression
+       - 0 行为变化: 1 处 regex, 4 个调用点都自动应用 */
     function wrapFencedCode(text, lang) {
+        const safeLang = (lang || '').replace(/[^a-zA-Z0-9_+#.\-]/g, '');
         const fence = '`'.repeat(fenceLen(text));
-        return '\n' + fence + lang + '\n' + text + '\n' + fence + '\n';
+        return '\n' + fence + safeLang + '\n' + text + '\n' + fence + '\n';
     }
 
     /* v1.15.7 新增：模块顶部常量，统一「这些语言名 = 代码块里包的是 Markdown 源码 / 纯文本，不是真程序代码」列表。

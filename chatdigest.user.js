@@ -1960,18 +1960,37 @@
     function initUI() {
         const panel = document.createElement('div');
         panel.id = 'c2k-panel';
-        panel.innerHTML = `
-            <div id="c2k-menu">
-                <div class="c2k-title">${SOFTWARE_NAME} · ${SITE ? SITE.name : t('ui.titleFallback')}</div>
-                <button data-act="all">${t('ui.btnAll')}</button>
-                <button data-act="latest">${t('ui.btnLatest')}</button>
-                <button data-act="copy">${t('ui.btnCopy')}</button>
-            </div>
-            <div id="c2k-actions">
-                <div id="c2k-fab" title="一键导出：注入并发送总结咒语，自动保存最新回复">📑</div>
-                <button id="c2k-arrow" title="更多操作" aria-label="更多操作">▴</button>
-            </div>
-        `;
+        // v1.21.0 改: 不用 innerHTML (Gemini CSP / Trusted Types 严格, 报
+        // "Element.innerHTML setter: Sink type mismatch violation blocked by CSP").
+        // 改用 DOM API 重建, 跨浏览器 + 跨站 CSP 兼容. 6 个 child elements 结构简单.
+        // c2k-title / c2k-menu / 3 个 button (data-act="all/latest/copy") / c2k-fab / c2k-arrow.
+        const menu = document.createElement('div');
+        menu.id = 'c2k-menu';
+        const title = document.createElement('div');
+        title.className = 'c2k-title';
+        title.textContent = `${SOFTWARE_NAME} · ${SITE ? SITE.name : t('ui.titleFallback')}`;
+        menu.appendChild(title);
+        for (const [act, key] of [['all', 'btnAll'], ['latest', 'btnLatest'], ['copy', 'btnCopy']]) {
+            const btn = document.createElement('button');
+            btn.setAttribute('data-act', act);
+            btn.textContent = t(`ui.${key}`);
+            menu.appendChild(btn);
+        }
+        panel.appendChild(menu);
+        const actions = document.createElement('div');
+        actions.id = 'c2k-actions';
+        const fabEl = document.createElement('div');
+        fabEl.id = 'c2k-fab';
+        fabEl.title = '一键导出：注入并发送总结咒语，自动保存最新回复';
+        fabEl.textContent = '📑';
+        actions.appendChild(fabEl);
+        const arrowEl = document.createElement('button');
+        arrowEl.id = 'c2k-arrow';
+        arrowEl.title = '更多操作';
+        arrowEl.setAttribute('aria-label', '更多操作');
+        arrowEl.textContent = '▴';
+        actions.appendChild(arrowEl);
+        panel.appendChild(actions);
         document.body.appendChild(panel);
 
         toastEl = document.createElement('div');

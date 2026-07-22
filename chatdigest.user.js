@@ -307,6 +307,15 @@
         const tag = el.tagName ? el.tagName.toLowerCase() : '';
         if (tag === 'button' || tag === 'svg' || tag === 'path' || tag === 'img') return true;
         const cls = (el.className || '').toString();
+        // v1.21.0 增: 千问 AI 回复末尾 ``` 装饰 (qk-md-text class + textContent 是纯 3+ 反引号).
+        // 必须在所有其他 class regex 检查**之前**跑 (放在最后也行, 但放最前性能好且语义清晰).
+        // qwen.html (line 11) 验证: chat-answers-card-wrap #2 块 145593-178130 内, card-container-wide div
+        // 配对 158258-170983, **在 card-container div 之后**有 `<br><span class="qk-md-text complete">\`\`\`</span>`
+        // (绝对 pos 171033, 在 div 外但在 chat-answers-card-wrap 内). 千问不解析 ``` 围栏, 原样 textContent.
+        // inlineToMd 对 span fall through return inner, raw ``` 字符进 .md 末尾. 不是 card-container 内部残留,
+        // 而是 card-container 块之后的"分隔装饰". 加固 isUiChrome 拦截, 避免透传.
+        // 不能误伤: 含其他字符的 qk-md-text (如 `<span class="qk-md-text complete">普通文本</span>` 仍正常透传).
+        if (/\bqk-md-text\b/i.test(cls) && /^[ \t\n]*`{3,}[ \t\n]*$/.test((el.textContent || ''))) return true;
         if (/\bds-[\w-]*(header|toolbar|action|copy|button|lang|label)[\w-]*\b/i.test(cls)) return true;
         // 豆包 chrome（data-foundation-type 时代，class 全是 minified 无稳定关键字）：
         // - send-message-action-bar: 用户消息工具栏（复制/分享/举报）

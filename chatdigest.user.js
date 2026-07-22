@@ -419,6 +419,19 @@
         // - visually-hidden: Bootstrap 4 / 通用
         // - screen-reader-only / screen-reader-text: 各种自定义变体
         if (/\b(cdk-visually-hidden|u?sr-only|visually-hidden|screen-reader-(only|text))\b/i.test(cls)) return true;
+        // v1.21.0 增: Gemini 站 code block 头 wrapper (.code-block-decoration.header-formatted)
+        // 含语言标签 (<span>Ini, TOML</span> / <span>Python</span> 等任意字符串) 跟 复制/下载
+        // 按钮, 整块是 chrome 不是内容. user 实测 outerHTML 真实结构:
+        // `<code-block>...<div class="code-block-decoration header-formatted ...">
+        //    <span>Ini, TOML</span>
+        //    <div class="buttons ..."><gem-icon-button>下载/复制</gem-icon-button>...</div>
+        // </div><pre><code>...</code></pre>...</code-block>`
+        // 跟千问 qk-md-table-action 同思路, class 匹配整块 strip, **不依赖具体语言名** (any string).
+        // 跟下方的 <code-block> blockToMd handler 配合: handler 抽语言 + 包围栏 (走 wrapFencedCode),
+        // isUiChrome strip 整块防兜底 (handler 漏判时不污染). 跨站通用, 不只 Gemini — 任何
+        // 用 .code-block-decoration class 包装的 code block 标头 (将来 Cursor / Warp 等用 custom
+        // element 包代码块都可能用) 都受益.
+        if (/\bcode-block-decoration\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();
@@ -475,6 +488,35 @@
         const hasList = /(^|\n)(-|\*|\+|\d+\.)\s/.test(text);
         const hasQuote = /(^|\n)>\s/.test(text);
         return heads >= 2 || hasTable || (heads >= 1 && (hasList || hasQuote));
+    }
+
+    /* v1.21.0 抽: 跨站通用 code block 处理.
+       之前 3 处 handler (<pre> / DeepSeek .md-code-block / Gemini <code-block>) 各自
+       重复了 4 行 (trim 换行 / check empty / MD_SOURCE_LANGS unwrap / wrapFencedCode),
+       100% 重复. 现在抽到这一个 helper, 三处 handler 只负责 site-specific 的
+       "找 code element" + "找 language" — 共同行为 (empty 检查 / MD_SOURCE_LANGS
+       解包 / wrapFencedCode 包围栏) 全部走 helper.
+
+       实测 (user 提供真实 outerHTML, Python 模拟整个 6276676 refactor 行为):
+       Gemini mpv.conf 例子, <code-block> 抽 lang="ini, toml" + code textContent
+       (含 hljs 注释) → codeBlockToMd 返回 `\\n```ini, toml\\n<text>\\n```\\n`
+       (lang="ini, toml" 不在 MD_SOURCE_LANGS, looksLikeMarkdownSource 不命中
+       lang=="" 分支, wrapFencedCode 正常 wrap). 0 行为 regression.
+
+       修法历史背景 (重要): f394fed 之前 (没 <code-block> handler) Gemini 站
+       <code-block> 走 generic walk → <pre> 走 <pre> 分支 → Gemini <code> class
+       不含 language-XXX → lang="" → looksLikeMarkdownSource(text) 误判 (mpv.conf
+       的 `# 注释` 命中 `(^|\\n)#{1,6}\\s` heads=2 ≥ 2) → return `\\n${text}\\n`
+       **解包不 wrap** — "代码块包裹没了" 的真根因. 抽 helper 不解决这问题,
+       是 <code-block> handler 绕开 <pre> 分支 + 直接 wrapFencedCode 才修.
+       抽 helper 是 refactor, 修 bug 的是 handler 加 <code-block> case. */
+    function codeBlockToMd(codeEl, lang) {
+        const text = (codeEl.textContent || '').replace(/^\n+/, '').replace(/\n+$/, '');
+        if (!text.trim()) return '';
+        if (MD_SOURCE_LANGS.includes(lang) || (lang === '' && looksLikeMarkdownSource(text))) {
+            return '\n' + text + '\n';
+        }
+        return wrapFencedCode(text, lang);
     }
 
     /* 行内元素 → Markdown（用于标题/段落/列表项/表格单元格的内部） */
@@ -549,26 +591,23 @@
                 : blockToMd(c);
         };
 
-        // 代码块
+        // 代码块 - v1.21.0 重构: 3 处 handler (<pre> / DeepSeek / Gemini) 都走统一
+        // codeBlockToMd(codeEl, lang) helper, 各自只负责 "找 code element" + "找 lang".
+        // 共同行为 (empty 检查 / MD_SOURCE_LANGS 解包 / wrapFencedCode 包围栏) 走 helper.
         if (tag === 'pre') {
+            // 通用 <pre><code> 路径 (Kimi / 元宝 / 千问 / 任何用标准 <pre><code> 的站).
+            // 语言: 从 <code> class 上 language-XXX / lang-XXX 标记抽.
             const code = el.querySelector('code') || el;
             const cls = code.className || '';
             const m = cls.match(/language-([\w+#.-]+)/i) || cls.match(/lang-([\w+#.-]+)/i);
-            const lang = m ? m[1].toLowerCase() : '';
-            let text = (code.textContent || '').replace(/^\n+/, '').replace(/\n+$/, '');
-            // 若语言标记为 markdown/md/plaintext/text/txt 等源码语言（见 MD_SOURCE_LANGS），
-            // 或虽无语言但整块就是 Markdown 文章源码（DeepSeek 等常把整篇回复包进代码围栏当
-            // 「纯 Markdown 导出」），则解包外层围栏、原样输出 Markdown，保留内部合法的 ```plaintext 等代码块。
-            if (MD_SOURCE_LANGS.includes(lang) || (lang === '' && looksLikeMarkdownSource(text))) {
-                return '\n' + text + '\n';
-            }
-            return wrapFencedCode(text, lang);
+            return codeBlockToMd(code, m ? m[1].toLowerCase() : '');
         }
         // DeepSeek 代码块：.md-code-block 包裹，内含 <pre>（带语法高亮 token）与 banner
         // （语言标签 <span class="d813de27"> + 复制/下载按钮）。
         if (tag === 'div' && /\bmd-code-block\b/.test(el.className || '')) {
-            // 1) 语言标签：优先取 banner 内的 .d813de27（DeepSeek 真实语言名：markdown / text / plaintext …），
-            //    回退到 banner 文本（去掉「复制/下载」按钮字）。旧逻辑查 [class*="header"] 会命中错误元素导致 lang 为空。
+            // DeepSeek 代码块: .md-code-block 包裹, 内含 <pre> (语法高亮 token) + banner
+            // (语言标签 .d813de27 + 复制/下载按钮).
+            // 1) 语言标签: 优先 .d813de27, 回退 banner 文本 (去 "复制/下载" 按钮字)
             const labelEl = el.querySelector('.d813de27');
             let lang = (labelEl ? labelEl.textContent : '').trim().toLowerCase();
             if (!lang) {
@@ -580,23 +619,64 @@
             // 2) 代码正文：优先 <pre>，其次 <code>；某些序列化快照 <pre> 为空时，
             //    退而取「去掉 banner/按钮后的整块文本」。
             const code = el.querySelector('pre') || el.querySelector('code');
-            let text = code ? (code.textContent || '') : '';
-            text = text.replace(/^\n+/, '').replace(/\n+$/, '');
-            if (!text.trim()) {
+            if (code && !code.textContent.trim()) {
                 const clone = el.cloneNode(true);
                 const b = clone.querySelector('.md-code-block-banner-wrap');
                 if (b) b.remove();
                 clone.querySelectorAll('button,.ds-button,svg').forEach(n => n.remove());
-                text = (clone.textContent || '').replace(/^\n+/, '').replace(/\n+$/, '').trim();
+                return codeBlockToMd(clone, lang);
             }
-            if (!text.trim()) return ''; // 真·空代码块
-            // 3) 这些语言（见 MD_SOURCE_LANGS）都是「把整篇 Markdown / 纯文本源码包起来的源码块」，
-            //    应解包为原始内容；只有真正的程序代码语言（python / js / bash / json …）才保留围栏。
-            //    对应 AI「只输出纯 Markdown 源码 / 不要整篇包进代码块」的诉求。
-            if (MD_SOURCE_LANGS.includes(lang)) {
-                return '\n' + text + '\n';
+            if (!code) return '';
+            return codeBlockToMd(code, lang);
+        }
+        // Gemini 代码块: <code-block> custom element 包裹, user 实测 outerHTML 真实结构:
+        //   <code-block class="ng-tns-... enable-luminous-code-block ng-star-inserted">
+        //     <div class="code-block ng-... ng-trigger-codeBlockRevealAnimation">
+        //       <div class="formatted-code-block-internal-container ...">
+        //         <div class="animated-opacity ...">
+        //           <div class="code-block-decoration header-formatted ...">   ← 语言标签 wrapper
+        //             <span>Ini, TOML</span>                                  ← 语言标签 (任意 string)
+        //             <div class="buttons ...">                                ← 复制/下载 按钮 wrapper
+        //               <gem-icon-button>下载</gem-icon-button>
+        //               <gem-icon-button>复制</gem-icon-button>
+        //             </div>
+        //           </div>
+        //           <pre><code role="text" data-test-id="code-content" class="code-container formatted">
+        //             <span class="hljs-comment"># 使用 gpu-next ...</span>     ← hljs 语法高亮 token
+        //             ...
+        //           </code></pre>
+        //         </div>
+        //       </div>
+        //     </div>
+        //   </code-block>
+        //
+        // 跟 DeepSeek .md-code-block 同思路: 抽语言 (从 .code-block-decoration > span) +
+        // 抽代码 (从 <pre><code>), 包装成 fenced code block. 不依赖 <code> class 上的
+        // language-XXX 标记 (Gemini 的 <code> class 只含 hljs-* 语法高亮, 没 language 标记).
+        //
+        // 关键: 走 handler 直接 return 不递归 children, 绕开 <pre> 分支的 looksLikeMarkdownSource
+        // 误判 (Gemini <code> class 不含 language-XXX → lang="" → mpv.conf 的 `# 注释` 命中
+        // `(^|\n)#{1,6}\s` heads=2 ≥ 2 → return `\n${text}\n` 解包不 wrap — f394fed 状态
+        // user 报 "代码块包裹没了" 的真根因). 走 handler 走 wrapFencedCode 直接 wrap.
+        //
+        // 抽 helper (codeBlockToMd) 行为等价: Gemini lang="ini, toml" 不在 MD_SOURCE_LANGS,
+        // (lang === "" && looksLikeMarkdownSource(text)) 不命中 (lang 不是 "") → wrapFencedCode.
+        // 实测 (Python 模拟 user 提供的真实 outerHTML, 2026-07-22): 输出 `\n```ini, toml\n<text>\n```\n`,
+        // 0 行为 regression.
+        //
+        // 整块抽出来后, isUiChrome 的 code-block-decoration 兜底 strip 残余 chrome 元素
+        // (label "Ini, TOML" + 复制/下载按钮). 防止 blockToMd 漏判时不污染.
+        if (tag === 'code-block') {
+            const pre = el.querySelector('pre');
+            if (!pre) return '';
+            const code = pre.querySelector('code') || pre;
+            let lang = '';
+            const decoration = el.querySelector('.code-block-decoration');
+            if (decoration) {
+                const labelSpan = decoration.querySelector('span');
+                if (labelSpan) lang = (labelSpan.textContent || '').trim().toLowerCase();
             }
-            return wrapFencedCode(text, lang);
+            return codeBlockToMd(code, lang);
         }
         if (tag === 'code') return '`' + (el.textContent || '').trim() + '`';
 

@@ -1740,12 +1740,15 @@
             return;
         }
         const snippet = SUMMARY_PROMPT.slice(0, 30);
+        // 记录发送前 msgs 数量, 发送后用 msgs.length 增加作为"AI 开始回复"信号
+        // (Gemini 模式: user message 移到对话顶部, input 仍含 user message 副本
+        // **不立即**清空, 500ms 检查 input 仍含 snippet → 误判发送失败.
+        // 实际 waitAndAutoSave 等 5s 后 msgs 会出现新 model-response, 这才是真成功信号).
+        const msgsBefore = getAssistantMessages().length;
         setInputValue(input, SUMMARY_PROMPT);
         // v1.21.0 改: 加 success check 避免「老回复被误导出」bug.
         // 之前: 注入失败 / 发送失败, waitAndAutoSave 仍然跑 → 5s 后等 AI 稳定 → 拿**老**
         // 最新回复导出, user 看到「按了 FAB 没注入, 过段时间导了上一个回复」误以为是注入到了.
-        // 修法: 注入 + 发送各等 500ms 读 input.innerText 验证, 任一失败 toast 错误并 return,
-        // 不调 waitAndAutoSave.
         setTimeout(() => {
             const injected = (input.innerText || input.textContent || '').includes(snippet);
             if (!injected) {
@@ -1754,17 +1757,27 @@
                 return;
             }
             autoSend(input);
-            // 发送后等 500ms 验证 input 被清空 (发送成功 → Quill 提交 + 清空 input)
+            // v1.21.0 改: 发送后等 3s (vs 500ms). Gemini 站 Quill 响应 Enter 后流程:
+            // 1) user message 移到对话顶部 (input 仍含 user message 副本 **不**立即清空)
+            // 2) AI 开始生成回复 (新 model-response 出现, msgs.length 增加)
+            // 500ms 检查 input.innerText 仍含 snippet → 误判"发送失败" (实测 user 报).
+            // 修法: 3s 后**任一**通过:
+            //   (a) input.innerText 不含 snippet (input 已清空, 正常 Quill 模式)
+            //   (b) msgs.length 增加 (AI 开始回复, Gemini 模式)
+            // 两者都失败 → 真发送失败, 不调 waitAndAutoSave (避免「老回复被误导出」)
             setTimeout(() => {
                 const stillHas = (input.innerText || input.textContent || '').includes(snippet);
-                if (stillHas) {
-                    console.error('[ChatDigest] send failed: input.innerText 仍包含 SUMMARY_PROMPT 截 30 字符 (没被清空)');
-                    toast('发送失败: ' + t('toast.inputNotFound'), 'error');
-                    return;  // 不调 waitAndAutoSave, 避免「老回复被误导出」
+                const msgsAfter = getAssistantMessages().length;
+                const newReplyStarted = msgsAfter > msgsBefore;
+                if (!stillHas || newReplyStarted) {
+                    // (a) input 已清空 或 (b) AI 开始回复 → 发送成功
+                    setTimeout(waitAndAutoSave, 1000);
+                    return;
                 }
-                // 发送成功, 进入等待-保存流程
-                setTimeout(waitAndAutoSave, 1000);
-            }, 500);
+                console.error('[ChatDigest] send failed: input.innerText 仍含 snippet, msgs.length 也未增加');
+                toast('发送失败: ' + t('toast.inputNotFound'), 'error');
+                return;  // 不调 waitAndAutoSave, 避免「老回复被误导出」
+            }, 3000);
         }, 500);
     }
 

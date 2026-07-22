@@ -1850,20 +1850,43 @@
         // 修法: 轮询 sendSel 找 button, 最多 2s (Angular re-render 实际 <500ms 足够 buffer).
         // 按钮一出现立刻 click. 2s 超时才走 fireEnter fallback.
         //
+        // v1.21.0 加固 (user 实测 Gemini 报 "[ChatDigest] send failed: ... msgs/users.length
+        // 也未增加"): 之前 sendSel 第一个命中是 [data-test-id*="send-button"] 容器 <div>,
+        // 不是真 button. 结构是 <div data-test-id="send-button-container"><gem-icon-button>
+        // <button aria-label="发送"></button></gem-icon-button></div>, 真 click handler 在
+        // inner <button> 上. el.click() 在 div 上 dispatch 出去, click 事件是**向上 bubble**
+        // 不是向下 — 不会触发 inner button 的 click handler. 所以 click 调了 Gemini 没反应.
+        // 修法: findSendButton 优先 <button> 元素; 没 button 才 fallback 到 container 然后
+        // querySelector 找内部 button. 保证点的是真 click handler 所在 element.
+        //
         // v1.21.0 改: **不**在这里 toast "已自动发送" — click / fireEnter 只是**尝试**发送,
         // 跟真正的 "发送成功" 不是一回事. user 实测报告: 文本刚出现在输入框 toast 就显示
         // "已自动发送", 但实际没发送 → 3s 后又显示 "发送失败", 两个 toast 矛盾. 修法:
         // autoSend 只做 attempt (click / fireEnter), 不显示 toast. 真正的成功 / 失败 toast
         // 在 injectSummaryPrompt 的 3s check 里, 根据 user-query / msgs / input 状态判断.
+        const findSendButton = () => {
+            let candidates = [];
+            try {
+                candidates = Array.from(document.querySelectorAll(sendSel))
+                    .filter(b => isVisible(b) && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
+            } catch (e) { return null; }
+            if (!candidates.length) return null;
+            // 优先 <button> 元素 (真 click handler 所在)
+            const btn = candidates.find(c => c.tagName === 'BUTTON');
+            if (btn) return btn;
+            // container / wrapper 没 button tag 自己, querySelector 找内部 button
+            for (const c of candidates) {
+                const innerBtn = c.querySelector && c.querySelector('button:not([disabled])');
+                if (innerBtn && isVisible(innerBtn)) return innerBtn;
+            }
+            // 兜底: 用第一个 candidate (可能 trigger 不响应, 但至少有 attempt)
+            return candidates[0];
+        };
         const startTs = Date.now();
         const POLL_MAX = 2000;
         const POLL_INTERVAL = 100;
         const tryClick = () => {
-            let btn = null;
-            try {
-                btn = Array.from(document.querySelectorAll(sendSel))
-                    .find(b => isVisible(b) && !b.disabled && !/(^|\s)--disabled(\s|$)/i.test(b.className || ''));
-            } catch (e) { btn = null; }
+            const btn = findSendButton();
             if (btn) {
                 btn.click();
                 return;

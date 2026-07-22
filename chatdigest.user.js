@@ -11,6 +11,7 @@
 // @match        *://www.doubao.com/*
 // @match        *://yuanbao.tencent.com/*
 // @match        *://www.qianwen.com/*
+// @match        *://gemini.google.com/*
 // @run-at       document-idle
 // @grant        GM_download
 // @grant        GM_setClipboard
@@ -240,6 +241,22 @@
             titleSel:     'h1, h2, .chat-title, header h1',
             inputSel:     'div[contenteditable="true"][data-slate-editor="true"]',
         },
+        gemini: {
+            name: 'Gemini',
+            // gemini.html 实测 (e:\projects\gemini.html, 2026-07-22, 247KB):
+            // - 用 Angular Material 框架 (ng-star-inserted 505 hits, mat-mdc-* 几百 hits)
+            // - AI 跟 user 用 custom element (Web Component) 不是普通 div: <model-response> / <user-query>
+            //   querySelectorAll('model-response') 跟 querySelectorAll('div') 一样能选, 千问 ADAPTERS 已验证
+            // - 真正 AI 文本在 <div class="markdown markdown-main-panel"> 段 (id="model-response-message-content<hash>")
+            // - user 文本在 <user-query-content> 内
+            // - input 跟 Kimi 一样用 Quill 富文本编辑器 (ql-editor class, contenteditable="true")
+            // - chrome 5 个 data-test-id (copy-button / more-menu-button / thumb-up/down / prompt-copy-button)
+            //   + Angular Material 通用 class (mat-icon / gem-icon-button / message-actions / freemium-rag-disclaimer)
+            assistantSel: 'model-response',
+            userSel:      'user-query',
+            titleSel:     'h1, h2, .conversation-title, header h1',
+            inputSel:     'div.ql-editor[contenteditable="true"]',
+        },
     };
 
     /* 自动识别当前站点 */
@@ -252,6 +269,7 @@
         if (host.includes('doubao')) return ADAPTERS.doubao;
         if (host.includes('yuanbao') || host.includes('tencent')) return ADAPTERS.yuanbao;
         if (host.includes('qianwen')) return ADAPTERS.qwen;
+        if (host.includes('gemini')) return ADAPTERS.gemini;
         return null;
     }
 
@@ -365,6 +383,31 @@
         //   整块是 link 引用, 不是 AI 写的回复内容, 必须 strip. 通配 [\\w-]+ 兼容 wide/narrow/mobile 等变种.
         //   qwen.html 实测 0 hit (新对话才出现), 不跟 chat-answers-card-wrap / message-card-j_n6rq 冲突 (前缀不同).
         if (/\b(chat-msg-bottom-anchor|answer-meta|assistant-text|chat-question-wrap|qk-md-(table-action(-title|-bar)?|table-download-(wrapper|icon|menu|menu-item)|download-icon|copy-icon)|card-container-[\w-]+)\b/i.test(cls)) return true;
+        // Gemini chrome (gemini.html 实测, 2026-07-22):
+        // 跟 yuanbao 同一思路: ancestor 检查更稳 (Angular Material 通用 class 不可靠, 误伤风险高).
+        // - [data-test-id="copy-button"]: AI 末尾复制按钮
+        // - [data-test-id="more-menu-button"]: AI 末尾更多菜单
+        // - [data-test-id="thumb-up-button"]: AI 点赞
+        // - [data-test-id="thumb-down-button"]: AI 点踩
+        // - [data-test-id="prompt-copy-button"]: user 提问复制按钮
+        // - <message-actions>: AI 末尾 actions 整段 (含 thumb / copy / more menu 等, custom element)
+        // - <freemium-rag-disclaimer>: Gemini 底部免责 ("Gemini can make mistakes" 等, custom element)
+        // - <gem-icon-button> / <gem-popover> / <mat-menu>: Gemini / Material 弹层组件
+        // ⚠️ 不能用 `el.closest('A, B')` 多 selector —— Element.closest() spec 规定只接
+        //    1 个 selector, 传逗号分隔会抛 DOMException SyntaxError 炸 IIFE.
+        //    必须拆成多次 closest() OR 起来.
+        if (el.closest && (
+            el.closest('[data-test-id="copy-button"]') ||
+            el.closest('[data-test-id="more-menu-button"]') ||
+            el.closest('[data-test-id="thumb-up-button"]') ||
+            el.closest('[data-test-id="thumb-down-button"]') ||
+            el.closest('[data-test-id="prompt-copy-button"]') ||
+            el.closest('message-actions') ||
+            el.closest('freemium-rag-disclaimer') ||
+            el.closest('gem-icon-button') ||
+            el.closest('gem-popover') ||
+            el.closest('mat-menu')
+        )) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();

@@ -2,7 +2,65 @@
 
 
 
-**Latest: v1.20.2（脚本） / v1.2.8（Python 工具链） / 2026-07-22** — **千问 (www.qianwen.com) production-ready: 5 fix cascade**:
+**Latest: v1.21.0（脚本） / v1.2.8（Python 工具链） / 2026-07-22** — **Gemini (gemini.google.com) production-ready: 13 fix cascade**:
+
+## v1.21.0：Gemini (gemini.google.com) production-ready: 13 fix cascade (2026-07-22)
+
+Gemini ADAPTERS 13 commit cascade 修完, 让 Gemini 从"勉强可用"→"真正 production-ready" (跟 v1.18.0 Kimi / v1.20.0 元宝 / v1.20.2 千问 production-ready 同级). 按 user 决定走 minor (1.20.2 → 1.21.0, 首次真正支持新站点 = 能力扩展):
+
+### Gemini 站专属修复 (12 commit)
+
+1. **`0586740` Gemini (gemini.google.com) ADAPTERS 适配 — 7 站点全支持**:
+   - 1 个新 ADAPTER (`gemini`), 跟 v1.20.0 元宝 / v1.20.2 千问一样 4 处改动一致: `@match` `gemini.google.com` / `ADAPTERS.gemini` / `isUiChrome` 10 个 chrome filter (cdk-visually-hidden / sr-only / visually-hidden / screen-reader-* / message-actions / freemium-rag-disclaimer / gem-icon-button / gem-popover / mat-menu + closest 链) / `detectSite` `gemini` 路由.
+   - Gemini 站用 Angular Material + custom element (`<code-block>` / `<gem-icon-button>` / `<message-actions>` / `<rich-textarea>` 等), 跟其他站 `<div>` / `<section>` 完全不同, 适配器必须祖先检查 (`el.closest()`) 多次拆不能用 `closest('A, B')` selector list.
+
+2. **`0e44ea5` initUI panel 改用 DOM API 重建, 修 Gemini CSP / Trusted Types 报错**:
+   - Gemini 站 CSP / Trusted Types policy 不允许 `innerHTML` setter 注入 HTML 字符串. `initUI` 之前用 `innerHTML` 一行注入整个 panel HTML, Gemini 报 "Sink type mismatch violation".
+   - 修法: 改用 DOM API (`document.createElement` + `appendChild` + `setAttribute`) 逐步重建 panel element tree, 不触发 Trusted Types 校验.
+
+3. **`87d4df1` initUI 局部 const `menu` 改名 `menuEl`, 修 const/let 重名冲突**:
+   - 改 initUI 用 DOM API 重建 panel, 局部加 `const menu = document.createElement('div')` 跟外层 `let menu` (line 1934) 同名, line 2002 `menu = panel.querySelector('#c2k-menu')` 给 const 赋值抛 "Invalid assignment to const 'menu'". strict mode 直接 SyntaxError 拒绝执行, Tampermonkey 静默吞, FAB 全部失效.
+   - 修法: 局部 const 改名 `menuEl`, 外层 `let menu` 赋值保留, line 2012/2016/2020 引用外层 menu (= menuEl 同元素) 行为 0 变化.
+
+4. **`fb9152e` Gemini FAB 注入/发送 3 处加固 (rich-textarea dispatch + success check + execCommand fallback)**:
+   - Gemini input 是 `<rich-textarea>` 包 `<ql-editor>` (Quill editor), paste / keydown event 必须派发到 2 个 target (rich-textarea 跟 ql-editor). 派发到 1 个 target 不会触发另一个. execCommand fallback 修复 input 失焦时 setInputValue 不生效.
+
+5. **`fa61d60` injectSummaryPrompt 发送 check 改 3s + msgs.length 增量判断 (Gemini 模式)**:
+   - Gemini 模式 AI 回复 1-5s 才出现 model-response, 旧版 1.5s check 误判"没回复 → 发送失败". 改 3s + msgs.length 增量判断: msgs 增加 → 发送成功.
+
+6. **`cc5a864` injectSummaryPrompt send check 加 user-query 数量信号 (Gemini 模式秒出)**:
+   - 进一步加 user-query 元素增量判断, Gemini 模式 user-query 元素 100ms 秒出 (不等 AI 启动), 3 个成功信号 (a) input 清空 OR (b) msgs 增加 OR (c) users 增加 任一通过即成功. 同时新增 i18n `toast.sendFailed` (zh+en) 替代之前误导文案 "找不到输入框".
+
+7. **`47fcb96` 撤回 `6fd39b6` 多 target Enter 派发 over-engineering, 改用 send button click**:
+   - `6fd39b6` 一坨 5 target Enter 派发 + beforeinput 兜底 (28 行), user 实测报"杀鸡用牛刀" + 给完整 send button HTML. 我没看 user 提供的 HTML 仔细分析就上 multi-target 派发链, 实际根因是 sendSel 可见性 check 在 Material Design CSS 下 (`b.offsetParent !== null` 失败) → 改 1 行 + 加 `[data-test-id*="send-button"]` 命中 Gemini 容器. 撤回 6fd39b6 (净 -30 行), 改 sendSel 可见性 check 用 `getClientRects` + 加 `[data-test-id*="send-button"]` 兜底 (净 +17 行).
+
+8. **`a1a19e6` autoSend 改轮询 send button (Gemini 内容驱动型 button 兜底)**:
+   - Gemini send button 是**内容驱动**渲染 — input 空时容器 `display:none`, input 有内容后 Angular re-render 加 "visible" class → `display:block`. 旧版 autoSend 同步 query 500ms 内 Angular re-render 没完成 → 按钮还在 `display:none` → 找不到 → 走 fallback → fallback 也不工作 → 双重失败.
+   - 修法: autoSend 改**轮询** (100ms 间隔, 最多 2s), button 一出现立刻 click, 实测 <500ms 命中.
+
+9. **`ffa14c4` autoSend toast 移走, 发送确认后才显示 (避免 click≠成功的误导)**:
+   - autoSend 调 `btn.click()` 立即 `toast('已自动发送', 'ok')` 是反模式, click 是 attempt 跟 success 是两件事. Gemini 模式下 click 后 input 失焦 / Angular 处理中, 3s 后才真发出去, 立即 toast "已发送" 跟 3s 后 "发送失败" 矛盾.
+   - 修法: autoSend 只做 attempt 不 toast, 3s check 确认 (user-query 出现 / msgs 增加 / input 清空) 后才 toast. 顺手清理 dead i18n key `toast.autoSentEnter` (autoSend fireEnter 后不再 toast, key 没用).
+
+10. **`f394fed` autoSend 优先选 `<button>` 元素, 避免 click container div 失效 (Gemini)**:
+    - sendSel 加 `[data-test-id*="send-button"]` 跟 `button[aria-label*="发送"]` 都命中, 但 `el.click()` 在 div container 上 dispatch 出去, click 事件**向上 bubble 不是向下** — 不会触发 inner button 的 click handler. Gemini send 结构嵌套: `<div data-test-id="send-button-container"><gem-icon-button><button aria-label="发送">`.
+    - 修法: 抽 `findSendButton()` helper, 3 层降级: 1) candidates 里直接有 `<button>` tag → 用它, 2) container/wrapper → drill down `querySelector('button:not([disabled])')` 找内部, 3) 兜底用 candidates[0].
+
+11. **`52af215` isUiChrome strip accessibility-hidden 元素 (修 Gemini "Gemini 说" 出现在抓取开头)**:
+    - Gemini 站用 `<h2 class="cdk-visually-hidden screen-reader-model-response-label">Gemini 说</h2>` 作为 screen-reader 提示, 视觉上不可见 (CSS `clip: rect(0 0 0 0); position: absolute;`) 但 textContent 还在 DOM 里, messageToMd 走 DOM tree 时把 "Gemini 说" 拼到 AI 回复开头.
+    - 修法: isUiChrome 加跨站通用 accessibility-hidden class 检查: `cdk-visually-hidden` (Material Design) / `sr-only` (Bootstrap 3) / `visually-hidden` (Bootstrap 4) / `screen-reader-only` (自定义) / `screen-reader-text` (自定义). 任何站出现这些 class 立即 strip, 跨站通用.
+    - Python 静态分析 gemini.html offset 164506 验证 7 个 cdk-visually-hidden 元素全是 screen-reader 文本 (与 Gemini 对话 / 你说 / Gemini 说 / 使用麦克风 等), 0 个超 20 chars, 不会误伤真实内容.
+
+12. **`680ee36` Gemini 站 `<code-block>` custom element handler + isUiChrome 兜底 strip code-block-decoration**:
+    - Gemini 站用 `<code-block>` custom element 包装代码块, 结构 `<code-block><div class="code-block-decoration header-formatted gds-emphasized-body-m"><span>Ini, TOML</span><div class="buttons">下载/复制</div></div><pre><code data-test-id="code-content" class="code-container formatted"><span class="hljs-comment"># 使用 gpu-next ...</span>...</code></pre></code-block>`.
+    - 修法 (3 部分): 1) isUiChrome strip `code-block-decoration` class 整块 wrapper (含语言标签 + 复制/下载按钮, class 匹配整块不依赖具体语言名); 2) blockToMd 加 `<code-block>` custom element handler, 抽语言 (`.code-block-decoration > span` 任意 string lowercase) + 抽代码 (`<pre><code>`, 不依赖 `<code>` class 的 language-XXX 标记, Gemini `<code>` class 只含 hljs-* 语法高亮); 3) 抽 `codeBlockToMd` helper 跨站统一 3 处 (`<pre>` / DeepSeek / Gemini), 共同逻辑 (empty 检查 / MD_SOURCE_LANGS 解包 / wrapFencedCode 包围栏) 走 helper.
+    - user 实测 (Python 模拟 user 提供的真实 outerHTML) 6 个检查项全 pass.
+
+13. **`89e3221` wrapFencedCode normalize lang 字符, 修 Gemini "ini, toml" lang 不识别导致 markdown renderer 不 wrap code block**:
+    - 真根因: 680ee36 commit 修了 `<code-block>` handler, 但 ` ```ini, toml ` fence lang 标识符含 `,` + ` ` 字符, **所有主流 markdown renderer** (VS Code / Obsidian / Typora / GitHub web) 看到 `,` ` ` 不识别为合法 fence info string, **不 wrap 成 code block, 整段当 inline text 处理**. CommonMark spec 严格说 info string 任意字符合法, 但**实际 renderer 行为**不一致, 是 spec 跟实现 gap.
+    - 之前 Python 模拟 (verify_e2e.py) 全部 PASS, 因为模拟只看 raw markdown 文本 contains 检查, **不** 跑 markdown renderer, 漏了这层. user 实测报"问题依旧"才暴露 renderer 行为差异.
+    - 修法: `wrapFencedCode` 内 normalize lang 字符串, 去掉所有非合法 fence lang 字符 (`[^a-zA-Z0-9_+#.\-]`), `ini, toml` → `initoml` (合法 lang, renderer 接受). 保留 `+` `#` `.` `-` 让 `c++` / `C#` / `objective-c` / `fsharp` 等真 lang identifier 不被破坏. 一处修, 4 个 wrapFencedCode 调用点 (`<pre>` / DeepSeek / Gemini / 其他) 自动应用, 跨站通用.
+    - 真测 (Python 模拟 22 case, 2026-07-22): `ini, toml` → `initoml` / `Shell/Bash` → `ShellBash` / `Python 3` → `Python3` / `HTML / CSS` → `HTMLCSS` / `c++` / `C#` 保留 / 合法 lang (python / bash / json / markdown / 等) 全部不变 0 行为 regression.
 
 ## v1.20.2：千问 (www.qianwen.com) production-ready: 5 fix cascade (2026-07-22)
 

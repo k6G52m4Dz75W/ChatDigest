@@ -957,10 +957,17 @@
         if (ansEl) {
             answer = normalizeMd(unwrapWrappingFence(blockToMd(ansEl)));
         } else {
-            // 非 DeepSeek / 无稳定类名：克隆节点，移除思考块与 UI 外壳，剩余即回复
+            // 非 DeepSeek / 无稳定类名：克隆节点，移除思考块，剩余即回复.
+            // 注意: 不**预先** strip isUiChrome 元素 — 看似"清理 UI 外壳", 实际有
+            // 严重副作用: <code-block> handler 抽 lang 依赖子元素
+            // .code-block-decoration > span, 预先 strip 会移除这个 div, handler 抽
+            // 不到 lang → 围栏无 lang 标识符 (v1.21.0 用户实测报"标头都去掉了吗" =
+            // 围栏 ```initoml 变 ```). inlineToMd 内部已处理 isUiChrome
+            // (`if (isUiChrome(el)) return '';`), 这里 strip 是**冗余**且**有害**的.
+            // 修法: 删 line `clone.querySelectorAll('*').forEach(isUiChrome remove)`,
+            // 让 inlineToMd 内部递归处理 children 时自动 return ''.
             const clone = node.cloneNode(true);
             if (thinkEl) thinkEl.remove();
-            clone.querySelectorAll('*').forEach(e => { if (isUiChrome(e)) e.remove(); });
             answer = normalizeMd(unwrapWrappingFence(blockToMd(clone)));
         }
         // 解包答案内可能内嵌的「整篇 Markdown 源码」围栏（plaintext/text/markdown/md），

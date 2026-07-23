@@ -1440,17 +1440,18 @@
         return lines.join('\n') + '\n\n';
     }
 
-    /* 构建文件头：统一 YAML frontmatter（保证信息完整、跨编辑器兼容）+ 标准 # 标题。
-       title/source/author/created/description/tags 对齐 Obsidian Properties 规范，
-       同时被 Jekyll/Hugo/VuePress 等广泛识别。
-       title 来自 resolveTitle（内容 h1 → 页面标题 → 空）或由「导出全部对话」直接传入的页面标题，与文件名一致；
-       若正文已含 h1 则不再补 # 标题，避免文件内出现两个一级标题。 */
+    /* v1.22.1 修正（用户实测 Gemini, 2026-07-23）：
+       3 条路径完全独立，绝不混淆：
+         ① filename title / yaml title: 走 resolveTitle（内容 h1 → 页面标题 → 空）
+         ② yaml description: 走 extractDescription（找 h1 后取前 N 字符；没 h1 降级从开头截）
+         ③ 正文 body: **原样输出** — 既不补 H1，也不把 <p> 升级成 # 标题
+       老版 buildHeader 在 hasH1=false 时 `return fm + '# ${title}\n\n'` 把
+       document.title 塞进 body 顶部，但内容本身就是普通 <p>，凭空多一个 H1
+       跟正文 <p> 撞，user 实测报"自说自话变成 h1"——这是错的. 修法: buildHeader
+       只 return yaml frontmatter, body 由 caller 原样追加, H1 由内容自带. */
     function buildHeader(title, content) {
         const fm = buildYamlFrontmatter(title, content, SITE ? SITE.name : '');
-        // 正文已含 h1 时不再补文件级标题，避免文件内出现两个一级标题
-        const hasH1 = /(^|\n)#\s+/.test(content || '');
-        if (hasH1) return fm;
-        return fm + `# ${title || 'AI 对话知识库'}\n\n`;
+        return fm;
     }
 
     function downloadMarkdown(content, titleOverride) {

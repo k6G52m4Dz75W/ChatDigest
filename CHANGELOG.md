@@ -2,7 +2,45 @@
 
 
 
-**Latest: v1.22.1（脚本） / v1.2.8（Python 工具链） / 2026-07-23** — **YAML frontmatter 修复 (description 缺失 + body 误补 H1)**: 2 commit hotfix 修 ChatDigest 3 路径搞混的相邻 bug
+**Latest: v1.22.2（脚本） / v1.2.8（Python 工具链） / 2026-07-23** — **千问 code block 行号修复 + Supported Sites 顺序整理**: 3 hotfix commit 修相邻 bug + 1 docs commit 整理表格/头部描述顺序
+
+## v1.22.2：千问 code block 行号修复 + Supported Sites 顺序整理 (2026-07-23)
+
+v1.22.1 发布后 user 实测千问站 (qianwen.com) 报: code block 导出时行号跟代码粘一起 (`1wsl --install...`), 真根因是 react-syntax-highlighter 库 (千问站用) 在每行前自动加 `<span class="linenumber ...">N</span>` 行号, 3 处 code block handler 走 `codeBlockToMd` helper, 内部用 `codeEl.textContent` 抽内容拼出 `1wsl` 数字前缀跟代码粘一起. 走 patch (1.22.1 → 1.22.2) 因为是修 v1.22.0 / v1.22.1 漏改的相邻 bug + 文档整理, 0 能力扩展. 4 commit 概览 (按时间序):
+
+1. **`1d39080` 修 `extractDescription` 降级支持没 H1 的内容** (跟 v1.22.1 一起 commit, 此处重提便于 1 个 release 看全):
+   - 症状: 没在当前话题跑过「📑 一键导出」直接点「📥 导出最新回复」, YAML frontmatter 缺 `description` 字段. stateful bug.
+   - 真根因: extractDescription `if (!started) continue;` hard gate 必须先遇到 H1 才收集, 没 H1 永远 started=false → buf 空 → 返回空 → buildYamlFrontmatter `if (desc) lines.push(description)` 跳过.
+   - 修法: 两阶段分离 — 先 `lines.findIndex(l => /^#\s/.test(l))` 找 H1 位置, 再从 H1 之后 (有 H1) 或 0 (没 H1, 降级从开头) 开始收集. description 永远有 fallback 值.
+
+2. **`53f1537` 修 `buildHeader` 不再补 H1, 正文原样输出** (3 路径独立):
+   - 症状: 修 1d39080 后 user 实测发现输出文件第一行是 `# Gemini 模型版本查询 - Google Gemini` (来自 document.title), 但内容 HTML 里**只是普通 `<p>`**, 不该变成 H1. user 喷: "正文的内容从来没有要把 p 改成 h1 的啊!! 补啥 h1 呢?! 正文内容就应该依原样输出! 这 3 条路经完全独立的, 检查代码并修正."
+   - 修法: buildHeader 只 return yaml frontmatter, body 由 caller (downloadMarkdown) 原样追加, H1 由内容自带.
+   - 3 路径独立: filename / yaml title / yaml description / body 各自职责, buildHeader 类函数**绝不**碰 body.
+
+3. **`1b5aa93` 修千问 code block 行号跟代码粘一起**:
+   - 症状: user 实测 qwen2.html 报: 千问站 code block 导出时, textContent 抽出来是 `1wsl --install -d Ubuntu` — 行号 "1" 跟 "wsl" 直接拼一起, 没空格.
+   - 真根因: react-syntax-highlighter 库 (千问站用) 在每行前自动加 `<span class="linenumber react-syntax-highlighter-line-number">N</span>` 行号. 3 处 code block handler (`<pre>` / DeepSeek `.md-code-block` / Gemini `<code-block>`) 都走统一 codeBlockToMd helper, 内部用 `codeEl.textContent` 抽内容, 拼出 `1wsl` 没空格.
+   - 修法: codeBlockToMd 抽 textContent 前先 clone + strip linenumber (`.linenumber, .react-syntax-highlighter-line-number` class 匹配整段 remove). 跨站通用: 任何用 react-syntax-highlighter 的站都受益, 0 副作用 (其他站用 hljs / Prism, .linenumber selector 0 命中). isUiChrome 加 `.linenumber` / `.react-syntax-highlighter-line-number` class 匹配兜底, 万一未来 inlineToMd 路径遇到 linenumber 也直接 return ''.
+
+4. **`67c83ef` 文档整理: Supported Sites 表格 + 头部描述站点顺序调整** (跟 v1.22.1 一起 commit):
+   - 千问 (v1.20.2) + ChatGPT (v1.22.1) 都已经 production-ready, 8 个支持站点全部真正能跑. 之前 Supported Sites 表格按"加入时间" 顺序排列, 现在按"生产环境实测稳定性" 重新排序, 自上而下: DeepSeek / Kimi / Yuanbao / Qianwen / Doubao / ChatGPT / Gemini / Claude.
+   - 同步调整 README.md (英文) + README.zh.md (中文) + chatdigest.user.js @description 三处"头部描述"列举的站点顺序.
+   - 未支持的 5 个站点 (Wenxin Yiyan / Zhipu Qingyan / Xunfei Spark / Perplexity / Grok) 顺序保持不变. CHANGELOG.md 历史段不动 (改历史是 anti-pattern). README line 86/290 example 列举不是"头部描述" 也没动.
+
+**真测覆盖 (避免 v1.22.0 之前"修了 1 条就 push release"反模式)**:
+
+| Bug 模式 | 修复 commit | 真测 | 真测场景 |
+|----------|------------|------|----------|
+| description 缺失 (stateful) | 1d39080 | Python 模拟完整 messageToMd 流程 10 case pass | 3 user-reported (ChatGPT/Gemini/Kimi 短回答) + 4 边界 + 2 边界 + 1 回归 |
+| body 凭空补 H1 (3 路径搞混) | 53f1537 | Python 模拟完整 downloadMarkdown 流程 6 case pass | A 带 H1 / **B user 实测 Gemini 模型查询** / C 「导出全部对话」 / D ChatGPT 单句 / E 完全空 / F 带 H1+围栏回归 |
+| 千问 code block 行号跟代码粘一起 | 1b5aa93 | Python 模拟完整 codeBlockToMd + isUiChrome 流程 8 case pass | **A 千问 user 实测触发 (单行 powershell)** / B 千问多行 / C DeepSeek hljs 回归 / D Gemini hljs 回归 / E 普通 markdown / F 空 code block / G 只有 linenumber 0 内容 / H isUiChrome 兜底 |
+
+**教训存 memory**:
+- **"stateful bug 真根因"** (1d39080): "必须先 X 才 Y" hard gate 是 implicit 的 stateful assumption, 设计 fallback 而不是 fail-hard.
+- **"3 路径独立"反模式** (53f1537): filename / yaml title / yaml description / body 各自职责, buildHeader 类函数**绝不**碰 body.
+- **"vendor library chrome 跨站通用"** (1b5aa93): react-syntax-highlighter 库的 `.linenumber` 是 vendor chrome, 不只千问站, 任何用这个库的站都受益. 修法放 `codeBlockToMd` helper 跟 `isUiChrome` 兜底, 跨站通用. 跟之前 `.code-block-decoration` (Gemini specific) 是不同 — vendor library 跨站通用, 站 specific 只在那个站.
+- **修任何一个 bug 时, 必 review 整个函数链找相邻漏改 bug** (跟之前 v1.21.0 release 修不完整 同类反模式). 1d39080 修 description 没动 buildHeader, 53f1537 补 buildHeader 才完整.
 
 ## v1.22.1：YAML frontmatter 修复 (description 缺失 + body 误补 H1) (2026-07-23)
 

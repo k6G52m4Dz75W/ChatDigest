@@ -2,7 +2,7 @@
 
 [English](./README.md) | **[中文](./README.zh.md)**
 
-**ChatDigest（聊摘）** 是一个 Tampermonkey 用户脚本，把 AI 网页对话（DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝 / 千问 / Gemini 等）一键整理成 **Markdown 知识库文章**。
+**ChatDigest（聊摘）** 是一个 Tampermonkey 用户脚本，把 AI 网页对话（DeepSeek / Kimi / 元宝 / 千问 / 豆包 / ChatGPT / Gemini / Claude 等）一键整理成 **Markdown 知识库文章**。
 
 > 思路：让 AI 自己当「总结引擎」，脚本只做「搬运工」+「文件管家」。在对话末尾让 AI 输出纯 Markdown，脚本负责抓取、命名、下载。
 

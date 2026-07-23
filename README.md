@@ -2,7 +2,7 @@
 
 **[English](./README.md)** | [中文](./README.zh.md)
 
-**ChatDigest (聊摘)** is a Tampermonkey userscript that turns AI web chats (DeepSeek / ChatGPT / Kimi / Claude / Doubao / Yuanbao / Qianwen / Gemini, etc.) into **Markdown knowledge base articles** with a single click.
+**ChatDigest (聊摘)** is a Tampermonkey userscript that turns AI web chats (DeepSeek / Kimi / Yuanbao / Qianwen / Doubao / ChatGPT / Gemini / Claude, etc.) into **Markdown knowledge base articles** with a single click.
 
 > Philosophy: let the AI itself be the "summarization engine" — the script just acts as the "porter" + "file librarian". Append a prompt at the end of the chat, the AI outputs pure Markdown, and the script handles capture, naming, and download.
 

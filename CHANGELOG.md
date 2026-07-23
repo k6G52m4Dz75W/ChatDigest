@@ -2,7 +2,48 @@
 
 
 
-**Latest: v1.22.0（脚本） / v1.2.8（Python 工具链） / 2026-07-23** — **Gemini code block 语言标头逻辑升级 (设计原则重构)**:
+**Latest: v1.22.1（脚本） / v1.2.8（Python 工具链） / 2026-07-23** — **YAML frontmatter 修复 (description 缺失 + body 误补 H1)**: 2 commit hotfix 修 ChatDigest 3 路径搞混的相邻 bug
+
+## v1.22.1：YAML frontmatter 修复 (description 缺失 + body 误补 H1) (2026-07-23)
+
+v1.22.0 发布后 user 实测 Gemini「导出最新回复」触发 2 个相邻 bug: ① 没在当前话题跑过「📑 一键导出」时 YAML frontmatter 缺 `description` 字段 (1d39080 修); ② YAML 头跟 body 之间凭空多出 `# Gemini 模型版本查询 - Google Gemini` H1, 但内容 HTML 里**只是普通 `<p>`**, 不该变成 H1 (53f1537 修). 走 patch (1.22.0 → 1.22.1) 因为是修相邻漏改 bug, 0 能力扩展. 2 commit 概览:
+
+1. **`1d39080` 修 `extractDescription` 降级支持没 H1 的内容**:
+   - **症状**: 没在当前话题跑过「📑 一键导出」直接点「📥 导出最新回复」, YAML frontmatter 缺 `description` 字段. 但「📑 一键导出」之后再点「📥 导出最新回复」 `description` 就出现. **stateful, 诡异.**
+   - **真根因**: `extractDescription` (chatdigest.user.js:1362) 用 `if (!started) { if (/^#\s/.test(raw)) started = true; continue; }` hard gate — 必须先遇到 H1 才收集, 没 H1 永远 `started=false`, buf 空, 返回空 → `buildYamlFrontmatter` `if (desc) lines.push(description)` 跳过 description 行.
+   - **为什么 stateful**: 一键导出 (📑) = `injectSummaryPrompt()` → 注入 SUMMARY_PROMPT 咒语 (**要求**"按层级标题重组 + # 标题") → AI 回复**带 H1** 的总结进对话历史. 导出最新回复 (📥) 抓当前最新 AI reply. 跑过一键导出 → 最新 AI reply 是带 H1 的总结 → extractDescription 找到 H1 后内容 → description 出现. 没跑过 → 最新 AI reply 是 user 正常聊天的简短回答, 通常没 H1 → extractDescription 返回空 → description 缺失.
+   - **修法**: 两阶段分离 — 先 `lines.findIndex(l => /^#\s/.test(l))` 找 H1 位置, 再从 H1 之后 (有 H1) 或 0 (没 H1, 降级从开头) 开始收集. description 永远有 fallback 值 (除非内容真为空). 0 行为 regression (summary 带 H1 行为完全一致).
+   - **附带**: 加 `if (buf.join(' ').length >= maxLen + 30) break;` 提前 break, 避免超长 markdown 时多余 regex 跑 + 之后又截断.
+
+2. **`53f1537` 修 `buildHeader` 不再补 H1, 正文原样输出** (3 路径独立):
+   - **症状**: 修 1d39080 后 user 实测 Gemini「导出最新回复」发现输出文件第一行是 `# Gemini 模型版本查询 - Google Gemini` (来自 `document.title`), 但内容 HTML 里**只是普通 `<p>`**, 不该变成 H1. user 喷: "正文的内容从来没有要把 p 改成 h1 的啊!! 补啥 h1 呢?! 正文内容就应该依原样输出! 这 3 条路经完全独立的, 检查代码并修正."
+   - **真根因**: 我自己搞混了 3 条**完全独立**的输出路径:
+     - ① **filename / yaml frontmatter title**: 走 `resolveTitle` (内容 h1 → 页面标题 → 空) — 文件名 + yaml 字段用
+     - ② **yaml frontmatter description**: 走 `extractDescription` (找 h1 后前 N 字符; 没 h1 降级从开头) — yaml 字段用
+     - ③ **正文 body**: **原样输出** — 既不补 H1, 也不把 `<p>` 升级成 `# 标题`
+   - 老版 `buildHeader` (line 1448) 错就错在第 3 条: `hasH1=false` 时 `return fm + '# ${title || 'AI 对话知识库'}\n\n'`, 把 `document.title` 塞 body 顶部. **body 不是 yaml 头的一部分**, 不能用 `document.title` 兜底. 这是 4 个 commit 之前"补个标题好看"的设计遗留.
+   - 之前 1d39080 (修 description bug) 修了路径 ②, 但 buildHeader 路径 ③ 一直没动. user 实测时**才发现** H1 一直就有 (从 v1.22.0 之前就有, 跟 1d39080 无关), 抓了 buildHeader 老代码.
+   - **修法**: `buildHeader` 只 `return fm`, body 由 caller (`downloadMarkdown` line 1456) 原样追加, H1 由内容自带.
+   ```js
+   function buildHeader(title, content) {
+       const fm = buildYamlFrontmatter(title, content, SITE ? SITE.name : '');
+       return fm;  // body 由 caller (downloadMarkdown) 原样追加, H1 由内容自带
+   }
+   ```
+
+**真测覆盖 (避免 v1.22.0 之前"修了 1 条就 push release"反模式)**:
+
+| Bug 模式 | 修复 commit | 真测 | 真测场景 |
+|----------|------------|------|----------|
+| description 缺失 (stateful) | 1d39080 | Python 模拟完整 messageToMd 流程 10 case pass | 3 user-reported (ChatGPT/Gemini/Kimi 短回答) + 4 边界 (长回答/bold+code+link/summary H1/围栏后跟文字) + 2 边界 (完全空内容/纯围栏) + 1 回归 (H1+文字) |
+| body 凭空补 H1 (3 路径搞混) | 53f1537 | Python 模拟完整 downloadMarkdown 流程 6 case pass | A 带 H1 / **B user 实测 Gemini 模型查询** / C 「导出全部对话」 / D ChatGPT 单句 / E 完全空 / F 带 H1+围栏回归 |
+
+**教训存 memory**:
+- **"stateful bug 真根因"** (1d39080): "必须先 X 才 Y" hard gate 是 implicit 的 stateful assumption, 设计 fallback 而不是 fail-hard.
+- **"3 路径独立"反模式** (53f1537): filename / yaml title / yaml description / body 各自职责, buildHeader 类函数**绝不**碰 body.
+- **修任何一个 bug 时, 必 review 整个函数链找相邻漏改 bug** (跟之前 v1.21.0 release 修不完整 同类反模式). 1d39080 修 description 没动 buildHeader, 53f1537 补 buildHeader 才完整.
+
+
 
 ## v1.22.0：Gemini code block 语言标头逻辑升级 (设计原则重构) (2026-07-23)
 

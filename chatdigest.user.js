@@ -458,27 +458,43 @@
        行为 100% 等价（fenceLen 算法 + 围栏拼接顺序都不变），仅 1 处定义 + 2 处调用。
        v1.15.7 补充：UNWRAP_LANGS 列表原本两处**有意不同**（pre 5 个 / md-code-block 8 个，含 plain/english/eng），
        但 v1.15.7 进一步提到 MD_SOURCE_LANGS 统一（见下）后，差异消除——本 helper 不再涉及。 */
-    /* v1.21.0 改: normalize lang 字符串, 去掉所有非合法 fence lang 字符.
-       修 Gemini 站 user 实测 "ini, toml 字样直接没了, 也没有代码块包裹了":
-       Gemini 的 lang label 是 UI 用的 "Ini, TOML" / "Python 3" / "c++" 等,
-       含 `,` / ` ` / `+` 等字符. CommonMark spec 允许 info string 是任意字符,
-       但**实际 markdown renderer** (VS Code / Obsidian / Typora / GitHub web) 看到
-       含 `,` / ` ` 的 lang 标识符**不** wrap 成 code block, 整段当 inline text 处理 —
-       user 看到 "使用 gpu-next 渲染器..." 没围栏.
+    /* v1.21.0 hotfix b8d44de+1: 删 89e3221 加的 safeLang normalize, 改用原样 lang 字符串.
 
-       修法: 把 lang 里所有非 `[a-zA-Z0-9_+#.\-]` 字符替换成 `''`, 让 lang 字符串
-       100% 是合法 fence lang 字符. `ini, toml` → `initoml` (6 字符, renderer 接受,
-       不会 wrap 失败). `Python 3` → `Python3`. `c++` → `c`. `C#` → `C`.
-       保留所有 ASCII 字母数字 + `_+#-.` 字符, 跨 renderer 兼容.
+       89e3221 commit 是**错**的 — 我之前**过度防御**, 假设 markdown renderer
+       (VS Code / Obsidian / Typora / GitHub web) 看到含 `,` ` ` 的 lang
+       标识符不 wrap 成 code block, 主动 normalize 成合法字符 (e.g. `ini, toml`
+       → `initoml`). 但 CommonMark spec 严格说 info string 可以是任意字符
+       (除反引号), `ini, toml` 合法. user 反馈:
+       > "ini, toml本身就是合法的! 你自己都说了根据markdown规范, 这里理论
+       > 上可以是任意字符! 我也不相信任何的真实世界的markdown阅读器/编辑
+       > 器会自说自话把这些认为是非法字符直接给strip了!"
+       > "事实上你根本不用管它写的是ini还是nin, 你只要把这部分解析出来,
+       > 包含到文件里就行了, 至于最终阅读器呈现的时候是否能看到它们,
+       > 与你毫无关系, 你也决定不了."
 
-       验证 (Python 模拟 user 提供的真实 outerHTML, 2026-07-22):
-       - Gemini mpv.conf: lang "ini, toml" → "initoml" → 围栏 ` ```initoml ` 任何 renderer 正常 wrap
-       - 之前合法 lang (python / js / bash / json / markdown / 等) normalize 后不变, 0 行为 regression
-       - 0 行为变化: 1 处 regex, 4 个调用点都自动应用 */
+       修法: 删 safeLang normalize, 改用原样 lang 字符串. chatdigest
+       只负责**解析** + **输出** — 渲染是 markdown renderer 自己的事, 跟
+       chatdigest 无关. 跨 renderer 兼容是 renderer 自己的责任, 不应该
+       推到 chatdigest 头上.
+
+       适用于**所有**站点, 不只 Gemini — 89e3221 commit 在 wrapFencedCode
+       内部, 4 个调用点 (`<pre>` / DeepSeek / Gemini / 其他) 都自动
+       应用, 删一处全改. DeepSeek / Kimi / 元宝 / 千问 等站的真实 lang
+       (python / bash / etc.) 也都**不** normalize, 原样保留.
+
+       验证 (Python 模拟, 2026-07-22):
+       - `ini, toml` 原样输出 → 围栏 ` ```ini, toml ` 完整保留 (CommonMark 合法)
+       - `python` / `bash` / `markdown` 等等所有 lang 原样保留, 0 行为变化
+       - `c++` / `C#` 原样保留 (+ / # 是 lang 字符, renderer 接受)
+       - 之前 89e3221 加的 normalize (e.g. `Python 3` → `Python3`) 撤销, 原样
+         保留 `Python 3` — 如果 renderer 不识别, 是 renderer 自己的问题.
+
+       教训存 memory: "CommonMark spec 严格允许任意字符 info string, chatdigest
+       不应该 normalize lang 标识符" — 设计原则是"解析 + 输出原样", 不
+       "猜 renderer 行为" */
     function wrapFencedCode(text, lang) {
-        const safeLang = (lang || '').replace(/[^a-zA-Z0-9_+#.\-]/g, '');
         const fence = '`'.repeat(fenceLen(text));
-        return '\n' + fence + safeLang + '\n' + text + '\n' + fence + '\n';
+        return '\n' + fence + (lang || '') + '\n' + text + '\n' + fence + '\n';
     }
 
     /* v1.15.7 新增：模块顶部常量，统一「这些语言名 = 代码块里包的是 Markdown 源码 / 纯文本，不是真程序代码」列表。

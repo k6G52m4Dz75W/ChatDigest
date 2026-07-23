@@ -858,18 +858,20 @@
        若只靠 blockToMd 的 <pre> 分支或 unwrapWrappingFence（仅查首行），
        会漏掉「答案中部」的内嵌源码围栏，导致导出 md 里残留一堆 ```plaintext 代码块。
        这里在 Markdown 文本层面扫描并解包这些「源码围栏」：
-       - 语言为 plaintext/text/markdown/md/txt → 必为「源码/纯文本」wrapper，直接解包为原始内容；
-       - 语言为空且内容整体像 Markdown 文章 → 同样解包；
-       - 其余语言（python/js/bash/...）→ 视为真正的代码块，保留围栏不动。
-       与 <pre> 分支、unwrapWrappingFence 互补且幂等：若 <pre> 分支已解包则此处无围栏可解。 */
+       - 语言为 plaintext/text/markdown/md/txt/plain/english/eng → 必为「源码/纯文本」wrapper，直接解包为原始内容；
+       - 其余语言（含无 lang 标识符）→ 视为真正的代码块，保留围栏不动。
+       与 <pre> 分支、unwrapWrappingFence 互补且幂等：若 <pre> 分支已解包则此处无围栏可解。
+       v1.21.0 hotfix 881538e+1: 删 (lang === '' && looksMd) heuristic. 之前保留是**错的**:
+       fence 字符类 [a-zA-Z0-9_+#.\-]* 匹配 0 字符 (lang === '' 时) + heuristic
+       命中 looksLikeMarkdownSource(mpv.conf 含 2 个 `# 注释` 行, heads=2 ≥ 2)
+       → 解包围栏 — "代码块包裹没了" 仍触发. 删 heuristic 后 fence 完整保留. */
     function unwrapSourceFences(md) {
         let out = md, prev, guard = 0;
         do {
             prev = out;
             out = out.replace(/```([a-zA-Z0-9_+#.\-]*)\n([\s\S]*?)\n```(?=\n|$)/g, (m, lang, body) => {
                 lang = (lang || '').toLowerCase();
-                const looksMd = looksLikeMarkdownSource(body);
-                if (MD_SOURCE_LANGS.includes(lang) || (lang === '' && looksMd)) {
+                if (MD_SOURCE_LANGS.includes(lang)) {
                     return body.replace(/^\n+/, '').replace(/\n+$/, '') + '\n';
                 }
                 return m; // 真正的程序代码块（python/js/...）保留

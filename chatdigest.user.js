@@ -432,6 +432,12 @@
         // 用 .code-block-decoration class 包装的 code block 标头 (将来 Cursor / Warp 等用 custom
         // element 包代码块都可能用) 都受益.
         if (/\bcode-block-decoration\b/i.test(cls)) return true;
+        // v1.22.2 增: react-syntax-highlighter 库 (千问站用) 在每行前自动加
+        // <span class="linenumber react-syntax-highlighter-line-number">N</span> 行号.
+        // 主修法在 codeBlockToMd 抽 textContent 前 clone + strip (3 处 code block handler 都
+        // 受益). isUiChrome 这里是兜底: 万一 inlineToMd 路径 (其他上下文) 遇刭 linenumber 也
+        // 直接 return ''. 跨站通用: 任何用 react-syntax-highlighter 的站都受益.
+        if (/\b(linenumber|react-syntax-highlighter-line-number)\b/i.test(cls)) return true;
         // 孤行语言标签（无子元素、文本恰为某语言名）
         if ((tag === 'span' || tag === 'label' || tag === 'div') && !el.children.length) {
             const t = (el.textContent || '').trim().toLowerCase();
@@ -554,7 +560,16 @@
        2. v1.21.0 (本 commit) Gemini 站普通 <pre><code> 走 <pre> 分支 → heuristic 误判解包
           — 删 heuristic 修. 两种 case 走不同路径, 都需要修. */
     function codeBlockToMd(codeEl, lang) {
-        const text = (codeEl.textContent || '').replace(/^\n+/, '').replace(/\n+$/, '');
+        // v1.22.2 修正（user 实测 qwen2.html, 2026-07-23）：
+        // react-syntax-highlighter 库（千问站用）在每行前自动加
+        // <span class="linenumber react-syntax-highlighter-line-number">N</span>
+        // 行号. code.textContent 抽出来是 "1wsl --install..." 数字前缀跟代码粘一起,
+        // 没空格. 修法: 抽 textContent 前先 clone + strip linenumber (vendor chrome, 不是
+        // 代码内容). 跨站通用: 任何用 react-syntax-highlighter 的站都受益, 0 副作用 (其他
+        // 站用 hljs / Prism, .linenumber selector 0 命中).
+        const code = codeEl.cloneNode(true);
+        code.querySelectorAll('.linenumber, .react-syntax-highlighter-line-number').forEach(n => n.remove());
+        const text = (code.textContent || '').replace(/^\n+/, '').replace(/\n+$/, '');
         if (!text.trim()) return '';
         if (MD_SOURCE_LANGS.includes(lang)) {
             return '\n' + text + '\n';

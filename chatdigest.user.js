@@ -1359,17 +1359,24 @@
        italic 跟 bullet `*` 的区分：bullet 行首 `*` 后面必跟空格，italic
        `*` 后面跟非空格非 `*` 字符——所以在 per-line 阶段处理 italic 时
        用 `\*([^*\s][^*\n]*?)\*` 卡住，bullet 不会被误杀。 */
+    /* v1.22.1 修正（用户实测 ChatGPT/Gemini, 2026-07-23）：
+       老版 `if (!started) continue;` hard gate 要求**必须先有 H1** 才收集，
+       导致「没跑过一键导出，直接导出最新回复」时 AI reply 不带 H1 →
+       extractDescription 返回空 → YAML frontmatter 缺 description。
+       修法：两阶段分离——先 scan 找 H1 索引位置，再从 H1 之后（或没 H1 时
+       从开头）开始收集。description 永远有 fallback 值（除非内容真为空）。 */
     function extractDescription(md, maxLen) {
         maxLen = maxLen || 100;
-        const lines = (md || '').split('\n');
-        let started = false;   // 跳到 H1 之后才收集
+        if (!md) return '';
+        const lines = md.split('\n');
+        // 阶段 1: 找第一个 H1 位置（没 H1 时 h1Idx = -1）
+        const h1Idx = lines.findIndex(l => /^#\s/.test(l));
+        // 阶段 2: 起点 = H1 之后 (有 H1) 或 0 (没 H1, 降级从开头收集)
+        const startIdx = h1Idx === -1 ? 0 : h1Idx + 1;
         let inFence = false;   // 围栏内代码跳过
         const buf = [];
-        for (const raw of lines) {
-            if (!started) {
-                if (/^#\s/.test(raw)) started = true;
-                continue;
-            }
+        for (let i = startIdx; i < lines.length; i++) {
+            const raw = lines[i];
             if (inFence) {
                 if (/^```/.test(raw)) inFence = false;
                 continue;
@@ -1402,6 +1409,9 @@
                 .trim();
             if (!cleaned) continue;
             buf.push(cleaned);
+            // 收集够 ~maxLen+30 字符就提前 break（给 regex strip 留余量,
+            // 避免超长 markdown 时多余 regex 跑 + 之后又截断）
+            if (buf.join(' ').length >= maxLen + 30) break;
         }
         const text = buf.join(' ').replace(/\s+/g, ' ').trim();
         if (!text) return '';

@@ -2,7 +2,7 @@
 
 **[English](./README.md)** | [中文](./README.zh.md)
 
-**ChatDigest (聊摘)** is a Tampermonkey userscript that turns AI web chats (DeepSeek / ChatGPT / Kimi / Claude / Doubao / Yuanbao, etc.) into **Markdown knowledge base articles** with a single click.
+**ChatDigest (聊摘)** is a Tampermonkey userscript that turns AI web chats (DeepSeek / ChatGPT / Kimi / Claude / Doubao / Yuanbao / Qianwen / Gemini, etc.) into **Markdown knowledge base articles** with a single click.
 
 > Philosophy: let the AI itself be the "summarization engine" — the script just acts as the "porter" + "file librarian". Append a prompt at the end of the chat, the AI outputs pure Markdown, and the script handles capture, naming, and download.
 
@@ -43,7 +43,7 @@
 | <img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Claude           | `claude.ai`             | ✅ Supported   | ✅                        | ✅              |
 | <img src="https://www.google.com/s2/favicons?domain=www.doubao.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Doubao (豆包)    | `www.doubao.com`        | ✅ Supported   | ✅                        | ✅              |
 | <img src="https://www.google.com/s2/favicons?domain=yuanbao.tencent.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Yuanbao (元宝)   | `yuanbao.tencent.com`   | ✅ Supported   | ✅                        | ✅              |
-| <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Gemini           | `gemini.google.com`     |                |                           |                 |
+| <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Gemini           | `gemini.google.com`     | ✅ Supported   | ✅                        | ✅              |
 | <img src="https://www.google.com/s2/favicons?domain=www.qianwen.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Qianwen (千问)   | `www.qianwen.com`        | ✅ Supported   | ✅                        | ✅              |
 | <img src="https://www.google.com/s2/favicons?domain=yiyan.baidu.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Wenxin Yiyan     | `yiyan.baidu.com`       |                |                           |                 |
 | <img src="https://www.google.com/s2/favicons?domain=chatglm.cn&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Zhipu Qingyan    | `chatglm.cn`            |                |                           |                 |

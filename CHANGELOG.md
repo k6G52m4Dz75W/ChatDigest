@@ -2,7 +2,43 @@
 
 
 
-**Latest: v1.21.0（脚本） / v1.2.8（Python 工具链） / 2026-07-22** — **Gemini (gemini.google.com) production-ready: 13 fix cascade**:
+**Latest: v1.22.0（脚本） / v1.2.8（Python 工具链） / 2026-07-23** — **Gemini code block 语言标头逻辑升级 (设计原则重构)**:
+
+## v1.22.0：Gemini code block 语言标头逻辑升级 (设计原则重构) (2026-07-23)
+
+v1.21.0 发布后 user 实测 Gemini 普通 `<pre><code>` 渲染 + `<code-block>` 包装 4 条 trigger 路径发现 bug cascade, 4 commit hotfix 修完. **不是 patch (1.21.0 → 1.21.1) 而是 minor (1.21.0 → 1.22.0)**: code block 语言标头逻辑涉及**设计原则重构** — 从"猜 markdown renderer 行为 + 主动 normalize lang 字符" → "只解析 + 输出原样, 渲染是 renderer 自己的事", 跨站通用, 算能力扩展 (跟之前 v1.18.0 Kimi 真正支持时 minor 同模式). 4 commit 概览 (按时间序):
+
+1. **`881538e` 删 `codeBlockToMd` 的 `(lang === '' && looksLikeMarkdownSource(text))` heuristic**:
+   - 症状: Gemini 普通 `<pre><code>` 渲染的 mpv.conf (含 2 个 `# 注释` 行) 走 `<pre>` 分支 → `codeBlockToMd(code, '')` → heuristic 命中 (`heads >= 2`) → **解包不 wrap** — "代码块包裹没了" 真根因之一.
+   - 修法: 删 heuristic, 只在 `MD_SOURCE_LANGS.includes(lang)` 明确是源码 lang 时解包. 没 lang 标识符时**不**假设是 markdown 源码, 走 `wrapFencedCode` 正常 wrap.
+
+2. **`7df4d75` 删 `unwrapSourceFences` 的 `(lang === '' && looksLikeMarkdownSource(body))` heuristic**:
+   - 症状: `<pre>` 分支走 `codeBlockToMd` (881538e 删了 heuristic) wrap 围栏 `\n\`\`\`\n<mpv.conf>\n\`\`\`\n` → **之后** `unwrapSourceFences` 扫描 → regex `[a-zA-Z0-9_+#.\-]*` 匹配 0 字符 (` ``` ` 后**直接** `\n`) → `lang === ''` → heuristic 命中 → **二次解包**!
+   - 修法: 删 `unwrapSourceFences` 的 heuristic. 跟 881538e 修的是**同一个 bug 模式** (heuristic 误判 mpv.conf `# 注释` 行), 走**不同** trigger 路径, **必须**两条都修. 教训存 memory: "同一 bug 模式在不同 trigger 路径上, 真测必须覆盖所有路径".
+
+3. **`b8d44de` 删 `messageToMd` else 分支的 isUiChrome 预先 strip**:
+   - 症状: `messageToMd` else 分支 line 963 `clone.querySelectorAll('*').forEach(e => { if (isUiChrome(e)) e.remove(); });` 在**`blockToMd` 之前**预先 strip 所有 isUiChrome 元素, 包括 `<code-block>` 元素**内部**的 `.code-block-decoration > span` "Ini, TOML" label. 之后 `<code-block>` handler 抽 lang 时 `el.querySelector('.code-block-decoration')` 返回 **null** → lang=`''` → 围栏 ` ``` ` **没** lang 标识符.
+   - 修法: 删 line 963 整行. `inlineToMd` 入口 line 554 `if (isUiChrome(el)) return '';` 内部已递归处理 children isUiChrome, line 963 strip 是**冗余**且**有害**的. 删 0 副作用.
+
+4. **`ca1658f` 删 `wrapFencedCode` 的 `safeLang` normalize, 撤销 `89e3221`** (设计原则重构):
+   - 症状: v1.21.0 的 `89e3221` commit 加 `safeLang = (lang || '').replace(/[^a-zA-Z0-9_+#.\-]/g, '')` 把 `ini, toml` 改成 `initoml`. user 极怒反馈 (2026-07-23): "ini, toml本身就是合法的! 你自己都说了根据markdown规范, 这里理论上可以是任意字符! 我也不相信任何的真实世界的markdown阅读器/编辑器会自说自话把这些认为是非法字符直接给strip了! 事实上你根本不用管它写的是ini还是nin, 你只要把这部分解析出来, 包含到文件里就行了, 至于最终阅读器呈现的时候是否能看到它们, 与你毫无关系, 你也决定不了."
+   - 设计原则 (user 定的): **chatdigest 只负责"解析 + 输出原样", 渲染是 markdown renderer 自己的事, 跟 chatdigest 无关**. 不发明 lang 标识符"合法"概念 — CommonMark spec 严格允许任意字符 info string (除反引号), `ini, toml` 合法. chatdigest 不应该**主动** normalize `,` ` ` `:` `/` 等字符.
+   - 修法: 删 `safeLang` normalize, `wrapFencedCode(text, lang)` 直接用 `lang` 原样字符串. 一处修, 4 个调用点 (`<pre>` / DeepSeek / Gemini / 其他) 都自动改. **跨站通用** — 不只 Gemini, DeepSeek / Kimi / 元宝 / 千问 等站真 lang (`python` / `bash` / 等) 也**不** normalize, 原样保留.
+   - 真测 (Python 模拟 16 case, 2026-07-23): `ini, toml` 原样保留 / `Python 3` / `Shell/Bash` / `HTML / CSS` 原样保留 / 真 lang (`python` / `bash` / `c++` / `C#` 等) 0 行为变化. 全部 16 case pass.
+
+**实测覆盖 4 条 trigger 路径** (避免 v1.21.0 之前"修了 1-2 条就 push release" 反模式):
+
+| 路径 | 修复 commit | 真测 |
+|------|------------|------|
+| `<pre>` 路径 (Gemini 普通 `<pre><code>` 渲染) | 881538e + ca1658f | Python 模拟 4 case pass + user 实测确认 |
+| `<code-block>` 路径 (Gemini `<code-block>` 包装) | 680ee36 + b8d44de | Python 模拟 4 case pass + user 实测确认 |
+| `unwrapSourceFences` 路径 (text 层面 fence 二次解包) | 7df4d75 | Python 模拟完整 messageToMd 流程 4 case pass |
+| `wrapFencedCode` 路径 (lang 字符 normalize) | ca1658f | Python 模拟 16 case pass |
+
+**诚实修正 v1.21.0 标签**:
+- v1.21.0 commit message 写 "13 fix cascade: 实测 (Python 模拟 verify_e2e.py 6 个 PASS 检查全过)" — **错的**. 实测**只**覆盖 `<code-block>` 路径 (user 之前提供的 outerHTML), 0 case 是 `<pre>` 路径 / `unwrapSourceFences` 路径 / `messageToMd` else 分支 strip 路径. v1.21.0 修**不完整**, user 反复报"问题依旧"才暴露.
+- v1.22.0 4 commit hotfix 修完 4 条 trigger 路径, **真测覆盖 4/4**, 0 case 失败.
+- 教训存 memory: "同一 bug 模式在不同 trigger 路径上, 真测必须覆盖所有路径".
 
 ## v1.21.0：Gemini (gemini.google.com) production-ready: 13 fix cascade (2026-07-22)
 

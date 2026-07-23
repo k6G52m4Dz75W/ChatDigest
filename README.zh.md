@@ -2,7 +2,7 @@
 
 [English](./README.md) | **[中文](./README.zh.md)**
 
-**ChatDigest（聊摘）** 是一个 Tampermonkey 用户脚本，把 AI 网页对话（DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝等）一键整理成 **Markdown 知识库文章**。
+**ChatDigest（聊摘）** 是一个 Tampermonkey 用户脚本，把 AI 网页对话（DeepSeek / ChatGPT / Kimi / Claude / 豆包 / 元宝 / 千问 / Gemini 等）一键整理成 **Markdown 知识库文章**。
 
 > 思路：让 AI 自己当「总结引擎」，脚本只做「搬运工」+「文件管家」。在对话末尾让 AI 输出纯 Markdown，脚本负责抓取、命名、下载。
 
@@ -43,7 +43,7 @@
 | <img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Claude           | `claude.ai`             | ✅ 已支持 | ✅                | ✅                |
 | <img src="https://www.google.com/s2/favicons?domain=www.doubao.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 豆包             | `www.doubao.com`        | ✅ 已支持 | ✅                | ✅                |
 | <img src="https://www.google.com/s2/favicons?domain=yuanbao.tencent.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 元宝             | `yuanbao.tencent.com`   | ✅ 已支持 | ✅                | ✅                |
-| <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Gemini           | `gemini.google.com`     |           |                   |                   |
+| <img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> Gemini           | `gemini.google.com`     | ✅ 已支持 | ✅                | ✅                |
 | <img src="https://www.google.com/s2/favicons?domain=www.qianwen.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 千问             | `www.qianwen.com`        | ✅ 已支持 | ✅                | ✅                |
 | <img src="https://www.google.com/s2/favicons?domain=yiyan.baidu.com&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 文心一言         | `yiyan.baidu.com`       |           |                   |                   |
 | <img src="https://www.google.com/s2/favicons?domain=chatglm.cn&sz=32" width="16" height="16" alt="" style="vertical-align:middle"> 智谱清言         | `chatglm.cn`            |           |                   |                   |
